@@ -777,7 +777,7 @@ test('empty mapped coverage, stale data and a saturated response remain distinct
     assert.equal(alprCamerasLayer.getStats().status, 'empty');
     assert.match(
       alprCamerasLayer.getStats().loadingLabel,
-      /No ALPR data for this area/,
+      /No mapped ALPR readers in this view — community mapping, unverified absence/,
     );
     h.expire();
     h.setFetch(async () =>
@@ -1293,7 +1293,7 @@ test('unsupported ALPR coverage suppresses the nearby count and names the extrac
     assert.equal(stats.countLabel, '');
     assert.equal(
       stats.loadingLabel,
-      'No ALPR data for this area — US and Canada only',
+      'No mapped ALPR data for this area — extracts cover the US and Canada only',
     );
   } finally {
     h.restore();

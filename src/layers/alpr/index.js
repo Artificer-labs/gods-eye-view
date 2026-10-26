@@ -469,24 +469,34 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         retryInSec: state.retryAt
           ? Math.max(0, Math.ceil((state.retryAt - Date.now()) / 1000))
           : 0,
+        // Absence wording here is LAW, not copy (spec §4; labelling.js):
+        // this map shows community mapping, so an empty view may only
+        // ever say NO MAPPED — never imply no reader exists. The audit
+        // in labelling.test.mjs fails on an unhedged absence claim.
         loadingLabel: state.loading
           ? state.retrying
             ? t('retrying mapped ALPR cameras')
             : t('loading mapped ALPR cameras')
           : state.noCoverage
-            ? t('No ALPR data for this area — US and Canada only')
+            ? t(
+                'No mapped ALPR data for this area — extracts cover the US and Canada only',
+              )
             : state.status === 'zoom-in'
               ? t('Zoom in to load mapped cameras')
               : [
                   state.stale ? t('Showing cached locations') : '',
                   state.saturated || state.renderSaturated
-                    ? t('Coverage limited — zoom in')
+                    ? t('Coverage limited — mapped data only, zoom in')
                     : '',
                   state.status === 'empty'
-                    ? t('No ALPR data for this area')
+                    ? t(
+                        'No mapped ALPR readers in this view — community mapping, unverified absence',
+                      )
                     : '',
                   state.status === 'ready' && state.onScreen === 0
-                    ? t('None on screen — nearby cameras are outside the view')
+                    ? t(
+                        'None on screen — mapped cameras nearby are outside the view',
+                      )
                     : '',
                 ]
                   .filter(Boolean)
@@ -526,3 +536,34 @@ export {
   mergeAlprAttributions,
   reconcileAlprSnapshots,
 } from './reconcile.js';
+export {
+  ALPR_MAPPING_BASIS,
+  MAPPER_DENSITY_CAVEAT,
+  NO_MAPPED_READER,
+  NO_MAPPED_READERS_IN_VIEW,
+  NO_MAPPED_DATA_FOR_AREA,
+  COVERAGE_LIMITED_MAPPED,
+  alprCoverageCaveatLines,
+  alprAbsenceLabel,
+} from './labelling.js';
+export {
+  createAlprSnapshotStore,
+  createChainedJsonl,
+  createMemorySnapshotIo,
+  createFileSnapshotIo,
+  fnv1a64Hex,
+  stableStringify,
+} from './snapshotStore.js';
+export {
+  ALPR_DIFF_FEED_VERSION,
+  ALPR_MOVED_THRESHOLD_M,
+  ALPR_RETAGGED_FIELDS,
+  alprStampKey,
+  liteAlprRecord,
+  alprAoiBbox,
+  alprRecordInAoi,
+  filterAlprRecordsToAoi,
+  diffAlprSnapshots,
+  buildAlprDiffFeedHeader,
+} from './diff.js';
+export { createAlprDiffCycleRunner } from './diffCycle.js';
