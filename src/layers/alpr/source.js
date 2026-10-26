@@ -16,6 +16,7 @@ import {
 } from '../../sources/vectorTiles.js';
 import { buildOverpassQuery, normalizeAlprNode } from './records.js';
 import { decodeAlprTile } from './tileRecords.js';
+import { stampAlprRecord } from './provenance.js';
 // Marks text for i18n extraction; the UI translates it with t(). Kept local
 // because AI tool services import this module outside the browser.
 const msg = (text) => text;
@@ -172,6 +173,12 @@ export function createAlprTileSource({
           .slice(0, SOURCE_RECORD_LIMIT)
           .map((item) => item.record);
       }
+      // Provenance envelope (spec §1.3): the extract's generation time is
+      // not visible on this path, so extract/source time stamps UNKNOWN —
+      // stated, never fabricated. One ingest instant per snapshot.
+      const ingestNow = Date.now();
+      for (const record of list)
+        stampAlprRecord(record, { witness: 'tiles', now: ingestNow });
       return {
         records: list,
         stale: false,
@@ -247,16 +254,27 @@ export function createOverpassAlprSource({
     if (!Array.isArray(payload?.elements) || payload.remark) {
       throw new Error(msg('Overpass returned an incomplete camera response'));
     }
+    // Provenance envelope (spec §1.3): the payload's OSM base timestamp is
+    // this witness's own source time; absent it, the stamp says UNKNOWN.
+    const sourceTs = payload.osm3s?.timestamp_osm_base ?? null;
+    const ingestNow = Date.now();
+    const records = [
+      ...new Map(
+        payload.elements
+          .slice(0, QUERY_LIMIT)
+          .map(normalizeAlprNode)
+          .filter(Boolean)
+          .map((record) => [record.id, record]),
+      ).values(),
+    ];
+    for (const record of records)
+      stampAlprRecord(record, {
+        witness: 'overpass',
+        now: ingestNow,
+        sourceTs,
+      });
     return {
-      records: [
-        ...new Map(
-          payload.elements
-            .slice(0, QUERY_LIMIT)
-            .map(normalizeAlprNode)
-            .filter(Boolean)
-            .map((record) => [record.id, record]),
-        ).values(),
-      ],
+      records,
       stale,
       saturated: payload.elements.length >= QUERY_LIMIT,
     };
