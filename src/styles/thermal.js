@@ -260,44 +260,13 @@ export const thermalShader = {
       // Center crosshair
       hud += crosshair(hudUV) * 0.7;
 
-      // Top-right: simulated temperature readout (derived from center luminance)
-      float centerLuma = dot(texture(colorTexture, vec2(0.5)).rgb, vec3(0.299, 0.587, 0.114));
-      float tempC = 20.0 + centerLuma * 30.0; // 20°C to 50°C range
-      int tempInt = int(tempC);
-      int tempDec = int(fract(tempC) * 10.0);
-
-      // Temperature digits at top-right
-      float tempHud = 0.0;
-      vec2 tempOrigin = vec2(0.88, 0.92);
+      // No temperature readout (audit F-04): the old HUD derived a decimal
+      // °C figure from center luminance — a number in measurement clothing
+      // for a quantity nothing measured. The palette is a display style;
+      // invented measurements are not. charSize/spacing below are shared
+      // with the frame counter.
       vec2 charSize = vec2(0.018, 0.035);
       float spacing = 0.02;
-
-      // Tens digit
-      vec2 d1p = (hudUV - tempOrigin) / charSize;
-      if (d1p.x >= 0.0 && d1p.x <= 1.0 && d1p.y >= 0.0 && d1p.y <= 1.0) {
-        tempHud += renderChar(d1p, tempInt / 10);
-      }
-      // Ones digit
-      vec2 d2p = (hudUV - (tempOrigin + vec2(spacing, 0.0))) / charSize;
-      if (d2p.x >= 0.0 && d2p.x <= 1.0 && d2p.y >= 0.0 && d2p.y <= 1.0) {
-        tempHud += renderChar(d2p, tempInt % 10);
-      }
-      // Decimal point
-      vec2 dpp = (hudUV - (tempOrigin + vec2(spacing * 2.0, 0.0))) / charSize;
-      if (dpp.x >= 0.0 && dpp.x <= 1.0 && dpp.y >= 0.0 && dpp.y <= 1.0) {
-        tempHud += renderChar(dpp, 10); // '.'
-      }
-      // Decimal digit
-      vec2 d3p = (hudUV - (tempOrigin + vec2(spacing * 2.6, 0.0))) / charSize;
-      if (d3p.x >= 0.0 && d3p.x <= 1.0 && d3p.y >= 0.0 && d3p.y <= 1.0) {
-        tempHud += renderChar(d3p, tempDec);
-      }
-      // Degree symbol
-      vec2 dgp = (hudUV - (tempOrigin + vec2(spacing * 3.5, 0.0))) / charSize;
-      if (dgp.x >= 0.0 && dgp.x <= 1.0 && dgp.y >= 0.0 && dgp.y <= 1.0) {
-        tempHud += renderChar(dgp, 11); // '°'
-      }
-      hud += tempHud * 0.8;
 
       // Bottom-right: frame counter
       int frame = int(mod(time * 30.0, 10000.0));
