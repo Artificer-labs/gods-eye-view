@@ -78,6 +78,20 @@ export function buildCensusArtifact(
   return {
     artifact: 'alpr-tag-census',
     brands: summarizeAlprBrands(records),
+    // License marking (Division V gate 1): the census is a DERIVED
+    // DATABASE of OpenStreetMap data. The attribution and the ODbL
+    // share-alike obligation travel inside the artifact itself — a
+    // bare source_url names where the data came from but carries
+    // neither the credit nor the license, and an artifact that can be
+    // copied without its license will be.
+    license: {
+      attribution: '© OpenStreetMap contributors',
+      license_id: 'ODbL-1.0',
+      license_url: 'https://opendatacommons.org/licenses/odbl/1.0/',
+      share_alike: true,
+      marking:
+        'Derived database of OpenStreetMap data — © OpenStreetMap contributors, available under the Open Database License (ODbL 1.0). Share-alike applies to derived databases produced from this artifact.',
+    },
     provenance: {
       source_url: sourceUrl,
       extract_ts: extractTs ?? 'UNKNOWN',

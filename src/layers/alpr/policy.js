@@ -76,5 +76,24 @@ export const SURFACE_BELOW_FLOOR_M = 30;
 export const SURFACE_SAMPLES_PER_PAINT = 2;
 export const SURFACE_ABOVE_FLOOR_M = 40;
 
-/** OSM attribution may collapse after five seconds; full credit stays in Data attribution. */
-export const CREDIT_DISPLAY_MS = 5000;
+/**
+ * Extract stall threshold (spec §1.4, §3.3 rule 5; Division V gate 6,
+ * plant i). The extract is hourly; if its SERVED timestamp (the TileJSON
+ * Last-Modified, the same basis the census artifact records) has not
+ * advanced and is older than this, the extract is frozen and the layer
+ * must degrade — a stalled extract may never masquerade as fresh.
+ * Matches the registry freshness budget for alpr-deflock-tiles (7200 s).
+ */
+export const EXTRACT_STALL_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Age bands on the mapper-asserted field-verification date (spec §2.4).
+ * Division V-adjustable constants, not buried literals: VERIFIED within
+ * one year, AGING to three, STALE beyond — and a null verification is
+ * STALE, never fresh. The rendered band is additionally capped by the
+ * provenance envelope's freshness (ageBands.js): what cannot say when
+ * its source spoke renders EXPIRED-class, whatever its field date says.
+ */
+export const AGE_BAND_VERIFIED_MS = 365.25 * 24 * 60 * 60 * 1000;
+export const AGE_BAND_AGING_MS = 3 * AGE_BAND_VERIFIED_MS;
+

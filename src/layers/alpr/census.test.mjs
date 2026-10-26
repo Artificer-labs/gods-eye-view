@@ -58,6 +58,12 @@ test('census artifact carries the capture provenance and brand buckets', () => {
   );
   assert.equal(artifact.provenance.extract_ts, '2026-10-26T12:45:12.000Z');
   assert.equal(artifact.provenance.decoded_zoom, 9);
+  // Gate 1: the artifact carries its ODbL attribution + share-alike
+  // marking inside itself, not only a source_url.
+  assert.equal(artifact.license.attribution, '© OpenStreetMap contributors');
+  assert.equal(artifact.license.license_id, 'ODbL-1.0');
+  assert.equal(artifact.license.share_alike, true);
+  assert.match(artifact.license.marking, /Share-alike/);
   assert.equal(artifact.total, 2);
   assert.equal(artifact.brands.buckets.FLOCK.count, 1);
   assert.equal(artifact.brands.buckets.UNKNOWN.count, 1);
