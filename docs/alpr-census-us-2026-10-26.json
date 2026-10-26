@@ -1,0 +1,56 @@
+{
+  "artifact": "alpr-tag-census",
+  "brands": {
+    "total": 144569,
+    "dualTagged": 15174,
+    "buckets": {
+      "FLOCK": {
+        "count": 116972,
+        "denominator": 144569,
+        "fraction": 0.8091084534028734
+      },
+      "OTHER": {
+        "count": 22534,
+        "denominator": 144569,
+        "fraction": 0.15587020730585396
+      },
+      "UNKNOWN": {
+        "count": 5063,
+        "denominator": 144569,
+        "fraction": 0.03502133929127268
+      }
+    }
+  },
+  "provenance": {
+    "source_url": "https://tiles.dontgetflocked.com/cameras-us-hourly.pmtiles",
+    "extract_ts": "2026-10-26T12:26:01.000Z",
+    "extract_ts_basis": "TileJSON Last-Modified response header at capture time",
+    "fetched_at": "2026-10-26T12:55:13.031Z",
+    "decoded_zoom": 9,
+    "tiles_decoded": 1541,
+    "dedupe": "by OSM node id (record.id)"
+  },
+  "total": 144569,
+  "fields": {
+    "operator": {
+      "count": 23694,
+      "fraction": 0.1638940575088712
+    },
+    "manufacturer": {
+      "count": 137731,
+      "fraction": 0.9527007864756621
+    },
+    "directionDeg": {
+      "count": 142643,
+      "fraction": 0.9866776418180938
+    },
+    "zone": {
+      "count": 127929,
+      "fraction": 0.8848992522601664
+    },
+    "lastVerified": {
+      "count": 0,
+      "fraction": 0
+    }
+  }
+}

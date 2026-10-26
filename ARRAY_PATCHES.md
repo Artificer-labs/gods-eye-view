@@ -80,16 +80,36 @@ are listed once, when created.
   (tasks 6–10) are what will let real records pass it; until then the
   gate withholds, which is the fail-closed intent.
 
-### Graft task 7 — satellites adapter (PROPAGATED, element epoch)
+### DeFlock live layer — spec tasks 1–3 (branch `array/deflock-live`, Division III ground desk)
 
-- `src/layers/satellites/records.js` — analyst records stamped at the
-  `getAnalystRecords` seam: source `celestrak-gp`, kind PROPAGATED,
-  `source_ts` = the satellite's own TLE element epoch (per-satellite
-  `satrec.jdsatepoch`; there is no catalog epoch in the data), additive
-  `elementEpoch`/`elementAgeS` fields, `ELEMENTS_AGED` past 72 h or
-  when the record's partition carries the proxy's stale aggregate.
-  F-11 remedy: the last-rendered-position fallback is DELETED — on
-  fresh-propagation failure the record is omitted, never stamped as
-  current (the fallback position's computation time is not knowable,
-  so any stamp on it would be invented).
-- `src/layers/satellites/records.test.mjs` (new) — 5 adapter tests.
+Owned outright (created by the fork):
+
+- `src/layers/alpr/provenance.js` — ALPR envelope over `src/data/provenance.js`:
+  witnesses, `osm_edit_ts` ("last edited in OSM") and `last_verified`
+  ("last field-verified (mapper-asserted)") kept apart by construction;
+  `extract_ts` stamps UNKNOWN until the tile path can see it. (Task 1)
+- `src/layers/alpr/pmtiles.js` — minimal PMTiles v3 reader for census use. (Task 1)
+- `src/layers/alpr/census.js` + `scripts/alpr-census.mjs` — measured tag census
+  over a captured extract; artifact `docs/alpr-census-us-2026-10-26.json`
+  (144,569 US records; FLOCK 116,972 of 144,569 with UNKNOWN 5,063 carried,
+  never guessed away). (Task 1)
+- `src/layers/alpr/brandBuckets.js` — FLOCK / OTHER / UNKNOWN bucketing over
+  operator+manufacturer, counts always with denominators. (Task 3)
+- `src/layers/alpr/reconcile.js` — dual-source reconciliation (tiles ×
+  Overpass): per-node Overpass precedence, `sinceExtract`, noted absences
+  only under clean queries, >25 m position conflicts flagged never averaged;
+  `createReconciledAlprSource` composes the factories without changing the
+  layer's default (tile-only, default-off) wiring. (Task 2)
+
+Touched-with-ledger (upstream files):
+
+- `src/data/sourceRegistry.js` — two entries added: `alpr-deflock-tiles`
+  (hourly extracts) and `alpr-overpass` (live viewport queries), ODbL-1.0.
+  The slice-1 `osm-alpr` entry and layer mapping are untouched. (Task 1)
+- `src/layers/alpr/source.js` — both factories now stamp every emitted
+  record via `stampAlprRecord` (kind REPORTED; Overpass stamps carry the
+  payload's `osm3s.timestamp_osm_base` as source time; tile stamps carry
+  source/extract time as explicit UNKNOWN). No fetch behaviour changed. (Task 1)
+
+Layer state: ALPR remains default-off; nothing in this slice lifts the
+cage — Division V's gate list (spec §6) still governs release.
