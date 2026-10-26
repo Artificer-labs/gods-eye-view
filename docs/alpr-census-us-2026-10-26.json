@@ -21,6 +21,13 @@
       }
     }
   },
+  "license": {
+    "attribution": "© OpenStreetMap contributors",
+    "license_id": "ODbL-1.0",
+    "license_url": "https://opendatacommons.org/licenses/odbl/1.0/",
+    "share_alike": true,
+    "marking": "Derived database of OpenStreetMap data — © OpenStreetMap contributors, available under the Open Database License (ODbL 1.0). Share-alike applies to derived databases produced from this artifact."
+  },
   "provenance": {
     "source_url": "https://tiles.dontgetflocked.com/cameras-us-hourly.pmtiles",
     "extract_ts": "2026-10-26T12:26:01.000Z",

@@ -450,19 +450,26 @@ test('all manufacturers share one ALPR title and color; only supplied metadata a
       new Set(entities.map((entity) => entity.billboard.image.getValue())).size,
       1,
     );
+    // Age-band readout (spec task 4): no mapper asserted a field
+    // verification, and the stubbed envelope cannot vouch freshness —
+    // the label says both, under their own names.
     assert.deepEqual(entities[0].gevLabelModel.details, [
       'OSM MAPPED',
       'FLOCK SAFETY · CITY POLICE · FIXED',
       'PUBLIC MAP DATA',
+      'FIELD VERIFIED UNKNOWN',
+      'AGE EXPIRED',
     ]);
     assert.deepEqual(entities[1].gevLabelModel.details, [
       'OSM MAPPED',
       'MOTOROLA SOLUTIONS',
       'PUBLIC MAP DATA',
+      'FIELD VERIFIED UNKNOWN',
+      'AGE EXPIRED',
     ]);
     assert.deepEqual(
       entities[2].gevLabelModel.details,
-      ['OSM MAPPED', 'PUBLIC MAP DATA'],
+      ['OSM MAPPED', 'PUBLIC MAP DATA', 'FIELD VERIFIED UNKNOWN', 'AGE EXPIRED'],
       'unknown metadata is not guessed, but the source is always named',
     );
     for (const entity of entities) {
