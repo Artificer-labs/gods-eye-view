@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { destinationPointDeg } from './model.js';
+import { alprAgeBand } from './ageBands.js';
 import {
   DIRECTION_CONE_M,
   DIRECTION_CONE_HALF_ANGLE_DEG,
@@ -64,6 +65,18 @@ export function alprLabelDetails(record, source) {
   ];
   if (equipment.length) details.push(equipment.join(' · '));
   if (sourceName === 'OpenStreetMap') details.push('PUBLIC MAP DATA');
+  // Age-band readout (spec §2.4): the field-verification date under its
+  // own name — UNKNOWN when no mapper asserted one — and the rendered
+  // band whenever it is worse than VERIFIED, so a stale or expired
+  // record's label says why it renders faded.
+  const verified = record.provenance?.last_verified ?? record.lastVerified;
+  details.push(
+    verified && verified !== 'UNKNOWN'
+      ? `FIELD VERIFIED ${verified}`
+      : 'FIELD VERIFIED UNKNOWN',
+  );
+  const band = alprAgeBand(record);
+  if (band !== 'VERIFIED') details.push(`AGE ${band}`);
   return details;
 }
 

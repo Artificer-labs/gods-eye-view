@@ -50,7 +50,10 @@ export const PANEL_LABEL_KEYS = Object.freeze({
   bikeshare: msg('Bike Share'),
   cctv: msg('Cameras'),
   'street-level': msg('Street Level'),
-  'alpr-cameras': msg('Mapped ALPR Cameras'),
+  // Spec §1.4 label law: this layer is LIVE-MAPPING — the compound is
+  // a term of art and is never shortened to LIVE (locales keep it
+  // verbatim for the same reason).
+  'alpr-cameras': msg('Mapped ALPR Cameras · LIVE-MAPPING'),
   'local-datacenters': msg('Data Centers'),
   'local-firms': msg('Active Fires'),
 });

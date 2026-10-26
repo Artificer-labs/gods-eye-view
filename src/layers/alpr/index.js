@@ -14,6 +14,7 @@ import {
   alprCreditMarkup,
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
+import { summarizeAlprAgeBands } from './ageBands.js';
 import { t, tn, msg } from '../../i18n/index.js';
 
 /**
@@ -41,7 +42,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     viewer: null,
     dataSource: null,
     credit: null,
-    creditTimer: null,
     creditPresented: false,
     enabled: false,
     records: [],
@@ -51,6 +51,10 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     error: null,
     status: 'idle',
     stale: false,
+    /** Served extract stamp of the last snapshot (ISO) — null when UNKNOWN. */
+    extractTs: null,
+    /** True when a consulted extract's served stamp has stopped advancing (frozen). */
+    extractStalled: false,
     /** Whether the query hit QUERY_LIMIT — the view likely holds more cameras than shown. */
     saturated: false,
     loading: false,
@@ -214,6 +218,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       if (snapshot.zoomIn) {
         state.records = [];
         state.recordById.clear();
+        state.extractTs = snapshot.extractTs ?? null;
+        state.extractStalled = snapshot.extractStalled === true;
         state.noCoverage = false;
         state.lastQueryBox = null;
         state.lastQueryZoom = null;
@@ -237,6 +243,11 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.recordById = new Map(records.map((r) => [r.id, r]));
       state.lastUpdate = Date.now();
       state.stale = stale;
+      // Extract health (spec §3.3 rule 5): a frozen extract must be
+      // visible from the layer's own health surface, not only implied
+      // by the stale flag.
+      state.extractTs = snapshot.extractTs ?? null;
+      state.extractStalled = snapshot.extractStalled === true;
       // Saturated when the QUERY truncated; the render cap is judged against
       // the cameras in view (renderSaturated). Either way the row says so.
       state.saturated = saturated;
@@ -443,6 +454,9 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         noCoverage: Boolean(state.noCoverage),
         lastUpdate: state.lastUpdate,
         stale: state.stale,
+        extractTs: state.extractTs ?? 'UNKNOWN',
+        extractStalled: Boolean(state.extractStalled),
+        ageBands: summarizeAlprAgeBands(state.records),
         saturated: state.saturated || state.renderSaturated,
         renderRevision: state.renderRevision,
         onScreen: state.onScreen ?? null,
@@ -455,24 +469,34 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         retryInSec: state.retryAt
           ? Math.max(0, Math.ceil((state.retryAt - Date.now()) / 1000))
           : 0,
+        // Absence wording here is LAW, not copy (spec §4; labelling.js):
+        // this map shows community mapping, so an empty view may only
+        // ever say NO MAPPED — never imply no reader exists. The audit
+        // in labelling.test.mjs fails on an unhedged absence claim.
         loadingLabel: state.loading
           ? state.retrying
             ? t('retrying mapped ALPR cameras')
             : t('loading mapped ALPR cameras')
           : state.noCoverage
-            ? t('No ALPR data for this area — US and Canada only')
+            ? t(
+                'No mapped ALPR data for this area — extracts cover the US and Canada only',
+              )
             : state.status === 'zoom-in'
               ? t('Zoom in to load mapped cameras')
               : [
                   state.stale ? t('Showing cached locations') : '',
                   state.saturated || state.renderSaturated
-                    ? t('Coverage limited — zoom in')
+                    ? t('Coverage limited — mapped data only, zoom in')
                     : '',
                   state.status === 'empty'
-                    ? t('No ALPR data for this area')
+                    ? t(
+                        'No mapped ALPR readers in this view — community mapping, unverified absence',
+                      )
                     : '',
                   state.status === 'ready' && state.onScreen === 0
-                    ? t('None on screen — nearby cameras are outside the view')
+                    ? t(
+                        'None on screen — mapped cameras nearby are outside the view',
+                      )
                     : '',
                 ]
                   .filter(Boolean)
@@ -498,3 +522,48 @@ export {
   QUERY_REUSE_MS,
 } from './policy.js';
 export { createOverpassAlprSource, createAlprTileSource } from './source.js';
+export { createExtractStallTracker } from './stall.js';
+export {
+  ALPR_AGE_BANDS,
+  ALPR_AGE_BAND_TINT,
+  alprAgeBand,
+  alprVerificationBand,
+  alprAgeBandAlpha,
+  summarizeAlprAgeBands,
+} from './ageBands.js';
+export {
+  createReconciledAlprSource,
+  mergeAlprAttributions,
+  reconcileAlprSnapshots,
+} from './reconcile.js';
+export {
+  ALPR_MAPPING_BASIS,
+  MAPPER_DENSITY_CAVEAT,
+  NO_MAPPED_READER,
+  NO_MAPPED_READERS_IN_VIEW,
+  NO_MAPPED_DATA_FOR_AREA,
+  COVERAGE_LIMITED_MAPPED,
+  alprCoverageCaveatLines,
+  alprAbsenceLabel,
+} from './labelling.js';
+export {
+  createAlprSnapshotStore,
+  createChainedJsonl,
+  createMemorySnapshotIo,
+  createFileSnapshotIo,
+  fnv1a64Hex,
+  stableStringify,
+} from './snapshotStore.js';
+export {
+  ALPR_DIFF_FEED_VERSION,
+  ALPR_MOVED_THRESHOLD_M,
+  ALPR_RETAGGED_FIELDS,
+  alprStampKey,
+  liteAlprRecord,
+  alprAoiBbox,
+  alprRecordInAoi,
+  filterAlprRecordsToAoi,
+  diffAlprSnapshots,
+  buildAlprDiffFeedHeader,
+} from './diff.js';
+export { createAlprDiffCycleRunner } from './diffCycle.js';

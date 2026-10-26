@@ -882,7 +882,23 @@ validateLayerStateRegistry();
 export function createDefaultLayerState() {
   return {
     version: LAYER_STATE_VERSION,
-    enabledLayerIds: [],
+    // ARRAY FORK — DeFlock layer LIT for the owner's viewing
+    // (2026-10-26, on Dylan's word in chat: "Light the DeFlock layer
+    // for my viewing"). The durable default set is this codebase's
+    // representation of default visibility, and the fork's own cage
+    // test defined the cage as absence from it. Division V's §6 gate
+    // list stands SUSTAIN on every line after re-examination, with
+    // Greta's dissent on file (deflock-greta-dissent.md); the §4
+    // labelling law is enforced in code with a failing-on-unhedged
+    // audit test. Conditions carried forward (ARRAY_PATCHES.md,
+    // LIGHTING RECORD): no person/vehicle join keys ever; no
+    // published blind-spot feed; any wider enabling requires fresh
+    // Division V re-examination; absence is always labelled as
+    // mapper absence. Authored state still wins: a share payload or a
+    // stored local state replaces this default wholesale, exactly as
+    // it does for every other layer — this entry changes only what a
+    // profile with no authored state opens with.
+    enabledLayerIds: ['alpr-cameras'],
     options: Object.fromEntries(
       OPTION_OWNER_IDS.map((ownerId) => [ownerId, defaultsForOwner(ownerId)]),
     ),

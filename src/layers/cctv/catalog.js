@@ -203,8 +203,10 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       const feedType = parts.model.normalizeFeedType(
         source.feedType || source.type || 'image',
       );
+      // A seed match must never upgrade a real source's heading confidence:
+      // authored defaults are not a survey of this camera (audit F-19).
       const headingConfidence = String(
-        source.headingConfidence || (seed ? 'high' : 'low'),
+        source.headingConfidence || 'low',
       ).toLowerCase();
       // CAL badge input (design §3b passthrough): hand-authored file/env source
       // entries may carry poseSource:'curated'. Austin Open Data rows never set

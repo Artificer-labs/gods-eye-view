@@ -75,10 +75,10 @@ export function createLifecycle({
       registerSpriteCollection('cctv', layerState._billboards);
 
       const sources = await parts.catalog.loadCameraSources();
-      const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
-      const catalog = catalogFromSources.length
-        ? catalogFromSources
-        : parts.catalog.seedCatalog();
+      // A failed or empty sources load renders an empty layer — an outage
+      // shown as an outage. The authored seed grid must never stand in for
+      // the real catalog (audit F-03): invented cameras are not a fallback.
+      const catalog = parts.catalog.buildCatalogFromSources(sources);
 
       // Viewshed color identity (design §3a): golden-angle hue over the
       // id-SORTED catalog index — deterministic across sessions for a stable

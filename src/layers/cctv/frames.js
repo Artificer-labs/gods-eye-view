@@ -41,6 +41,53 @@ export function fitToProjection(sourceW, sourceH) {
   };
 }
 
+/**
+ * Freshness of a drawn frame at an instant, on the provenance module's
+ * thresholds (src/data/provenance.js `freshnessOf`) with the projection
+ * refresh interval as the cadence: LIVE to 2.5× the interval (cadence +
+ * slack), AGING to 3×, STALE to 6×, EXPIRED beyond. A frame with no known
+ * draw time is EXPIRED: what cannot say when it happened is not live data.
+ * Pure, so the budget is unit-testable without a canvas.
+ *
+ * @param {number} frameAtMs - Epoch ms when the drawn frame was fetched.
+ * @param {number} [nowMs] - The instant to judge at (defaults to now).
+ * @param {number} [refreshMs] - The camera's projection refresh interval.
+ * @returns {{ageMs: number|null, state: 'LIVE'|'AGING'|'STALE'|'EXPIRED'}}
+ */
+export function frameFreshness(
+  frameAtMs,
+  nowMs = Date.now(),
+  refreshMs = PROJECTION_IDLE_REFRESH_MS,
+) {
+  const cadence =
+    Number.isFinite(refreshMs) && refreshMs > 0
+      ? refreshMs
+      : PROJECTION_IDLE_REFRESH_MS;
+  if (!Number.isFinite(frameAtMs) || frameAtMs <= 0)
+    return { ageMs: null, state: 'EXPIRED' };
+  const ageMs = Math.max(0, nowMs - frameAtMs);
+  if (ageMs <= cadence * 2.5) return { ageMs, state: 'LIVE' };
+  if (ageMs <= cadence * 3) return { ageMs, state: 'AGING' };
+  if (ageMs <= cadence * 6) return { ageMs, state: 'STALE' };
+  return { ageMs, state: 'EXPIRED' };
+}
+
+/**
+ * Compact age for the placeholder status line ("45S", "3M 05S", "2H 07M").
+ * @param {number|null} ageMs
+ * @returns {string}
+ */
+export function formatFrameAge(ageMs) {
+  if (!Number.isFinite(ageMs) || ageMs < 0) return 'UNKNOWN';
+  const totalSeconds = Math.floor(ageMs / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}S`;
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60)
+    return `${minutes}M ${String(totalSeconds % 60).padStart(2, '0')}S`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}H ${String(minutes % 60).padStart(2, '0')}M`;
+}
+
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
    * FNV-1a over the RGB channels of a downsampled frame. Pure (takes the raw
@@ -358,6 +405,9 @@ export function createFrames({ state: layerState, services, parts, source }) {
         const signature =
           pixels === null ? null : `${pixels}:${fit.w}x${fit.h}`;
         runtime.drawnImageStamp = runtime.imageStamp;
+        // The frame on the canvas was fetched at its load stamp; that is
+        // the anchor every later age judgement (frameFreshness) reads.
+        runtime.lastFrameAt = runtime.imageStamp;
         if (signature !== null && signature === runtime.lastFrameSignature) {
           // Identical pixels — leave the canvas, and therefore the bound
           // texture, completely alone. No canvasStamp bump, no swap, no flash.
@@ -377,12 +427,32 @@ export function createFrames({ state: layerState, services, parts, source }) {
       }
       return;
     }
-    // A refresh is in flight (imageReady=false): keep the last good frame on
-    // the canvas instead of flashing the placeholder. Placeholder only paints
-    // when nothing has ever been drawn for this camera.
-    if (runtime.drawnImageStamp === -1) {
-      paintPlaceholderThrottled(record, runtime, health);
+    // A refresh is in flight or has failed (imageReady=false). The last good
+    // frame may stay on the canvas only inside its freshness budget — past
+    // AGING it would be presenting as "now" a frame that is not (audit
+    // F-08). Beyond the budget the placeholder takes the plane, carrying the
+    // frame's state and age in its status line, and keeps carrying them on
+    // every repaint until a fresh frame lands.
+    const refreshMs =
+      record.camera.id === layerState._activeCameraId
+        ? PROJECTION_ACTIVE_REFRESH_MS
+        : PROJECTION_IDLE_REFRESH_MS;
+    const fresh = frameFreshness(runtime.lastFrameAt, Date.now(), refreshMs);
+    if (
+      runtime.drawnImageStamp !== -1 &&
+      fresh.state !== 'STALE' &&
+      fresh.state !== 'EXPIRED'
+    ) {
+      return;
     }
+    const placeholderHealth =
+      runtime.lastFrameAt && fresh.state !== 'LIVE' && fresh.state !== 'AGING'
+        ? {
+            status: fresh.state,
+            message: `LAST FRAME ${formatFrameAge(fresh.ageMs)} OLD — ${fresh.state}`,
+          }
+        : health;
+    paintPlaceholderThrottled(record, runtime, placeholderHealth);
   }
   return {
     frameSignatureFromPixels,

@@ -8,7 +8,6 @@ import {
   ALPR_SELECTED_COLOR,
   MARKER_ICON_SIZE,
   SELECTED_MARKER_ICON_SIZE,
-  CREDIT_DISPLAY_MS,
   MARKER_FLOOR_LIFT_M,
   MARKER_SCALE_BY_DISTANCE,
 } from './policy.js';
@@ -23,6 +22,7 @@ import {
   alprLabelDetails,
   validAlprGroundHeight,
 } from './visuals.js';
+import { alprAgeBand, ALPR_AGE_BAND_TINT } from './ageBands.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -232,6 +232,17 @@ export function createAlprPresentation({ state, services, source }) {
     const color = Cesium.Color.fromCssColorString(
       selected ? ALPR_SELECTED_COLOR : ALPR_COLOR,
     );
+    // Age-band tint (spec §2.4): an unselected marker renders in its
+    // band's grey/alpha, so an old or envelope-expired record is visibly
+    // not current at map scale. Selection always restores full color —
+    // the record being read is never the faded one.
+    const band = entity.gevAlprRecord
+      ? alprAgeBand(entity.gevAlprRecord)
+      : 'VERIFIED';
+    const [tr, tg, tb, ta] = selected
+      ? [1, 1, 1, 1]
+      : ALPR_AGE_BAND_TINT[band];
+    entity.billboard.color = new Cesium.Color(tr, tg, tb, ta);
     entity.billboard.image = selected ? SELECTED_IMAGE : MARKER_IMAGE;
     entity.billboard.width = entity.billboard.height = selected
       ? SELECTED_MARKER_ICON_SIZE
@@ -316,8 +327,6 @@ export function createAlprPresentation({ state, services, source }) {
 
   function hideOnMapCredit() {
     services.credits?.hideOsmCredit?.(state.viewer, LAYER_ID);
-    clearTimeout(state.creditTimer);
-    state.creditTimer = null;
     if (state.credit)
       state.viewer?.creditDisplay?.removeStaticCredit(state.credit);
     governorRequestRender('alpr-credit');
@@ -335,7 +344,14 @@ export function createAlprPresentation({ state, services, source }) {
     if (!state.enabled || state.creditPresented || !state.credit) return;
     state.creditPresented = true;
     state.viewer.creditDisplay?.addStaticCredit(state.credit);
-    state.creditTimer = setTimeout(hideOnMapCredit, CREDIT_DISPLAY_MS);
+    // PERSISTENT credit (Division V gate 1, item a): the fallback Cesium
+    // credit used to collapse after CREDIT_DISPLAY_MS while the OSM
+    // data stayed on screen — attribution that vanishes under visible
+    // data is a terms breach with a timer on it. Choice: persistent,
+    // matching the shared credits service above (showOsmCredit never
+    // auto-hides). The credit now lives exactly as long as the records
+    // it credits: hideOnMapCredit runs when the layer clears, disables,
+    // or has nothing visible.
     governorRequestRender('alpr-credit');
   }
 
@@ -463,6 +479,7 @@ export function createAlprPresentation({ state, services, source }) {
           directionDeg: record.directionDeg,
           ref: record.ref,
           lastVerified: record.lastVerified,
+          ageBand: alprAgeBand(record),
           osmId: record.osmId,
           sourceTag: record.source,
         },

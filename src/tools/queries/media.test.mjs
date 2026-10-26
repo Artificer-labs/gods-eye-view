@@ -110,7 +110,7 @@ test('a snapshot returns the frame as an image with its credit', async () => {
   });
 });
 
-test('mounted camera fallback provenance survives the source and MCP image result', async (t) => {
+test('mounted camera: a dead feed yields no snapshot — no Street View stand-in', async (t) => {
   const { cctvProxy } = await import('../../../server/providers/cctv.js');
   const { createCctvSource } = await import('../../layers/cctv/source.js');
   const camera = {
@@ -195,27 +195,30 @@ test('mounted camera fallback provenance survives the source and MCP image resul
     tools: coreTools,
     services: { cctv: source },
   });
-  const fallback = await catalog.call('get_cctv_snapshot', {
-    camera_id: camera.id,
+  // Dead upstream: there is no fallback snapshot at all. The old chain
+  // served a Street View photograph here — labelled historical by this
+  // tool, but a photograph standing in the camera's slot all the same.
+  // Now the frame is the synthetic status card, which the tool refuses as
+  // an image, and Google is never consulted (audit F-07).
+  await assert.rejects(
+    catalog.call('get_cctv_snapshot', { camera_id: camera.id }),
+    (error) => error.code === 'unavailable',
+  );
+  assert.deepEqual(calls, ['https://camera.example']);
+  const server = createMcpServer({ catalog, name: 'test', version: '1' });
+  const deadResult = await server.handle({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'get_cctv_snapshot', arguments: { camera_id: camera.id } },
   });
-  assert.equal(fallback.data.source_kind, 'streetview');
-  assert.equal(fallback.data.current_view, false);
-  assert.equal(fallback.data.credit, 'Google Street View');
-  assert.match(fallback.summary, /Street View fallback/);
-  assert.match(fallback.summary, /Historical imagery/);
-  assert.doesNotMatch(
-    fallback.summary,
-    /Current view|courtesy of Fixture transport agency/,
+  assert.equal(deadResult.result.isError, true);
+  assert.ok(
+    !deadResult.result.content.some((entry) => entry.type === 'image'),
   );
-  assert.equal(
-    fallback.images.length,
-    1,
-    'the historical image stays available with its caveat',
-  );
-  assert.deepEqual(calls, [
-    'https://camera.example',
-    'https://maps.googleapis.com',
-  ]);
+  const placeholder = await source.getFrame(camera);
+  assert.equal(placeholder.sourceKind, 'synthetic');
+  assert.equal(placeholder.contentType, 'image/svg+xml');
   upstreamAvailable = true;
   const current = await catalog.call('get_cctv_snapshot', {
     camera_id: camera.id,
@@ -224,38 +227,6 @@ test('mounted camera fallback provenance survives the source and MCP image resul
   assert.equal(current.data.current_view, true);
   assert.equal(current.data.credit, camera.credit);
   assert.match(current.summary, /^Current view from/);
-  const server = createMcpServer({ catalog, name: 'test', version: '1' });
-  upstreamAvailable = false;
-  const result = await server.handle({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/call',
-    params: { name: 'get_cctv_snapshot', arguments: { camera_id: camera.id } },
-  });
-  assert.ok(
-    result.result.content.some(
-      (entry) => entry.type === 'text' && /Historical imagery/.test(entry.text),
-    ),
-  );
-  assert.ok(result.result.content.some((entry) => entry.type === 'image'));
-  process.env.GOOGLE_MAPS_SERVER_API_KEY = '';
-  const placeholder = await source.getFrame(camera);
-  assert.equal(placeholder.sourceKind, 'synthetic');
-  assert.equal(placeholder.contentType, 'image/svg+xml');
-  await assert.rejects(
-    catalog.call('get_cctv_snapshot', { camera_id: camera.id }),
-    (error) => error.code === 'unavailable',
-  );
-  const unavailable = await server.handle({
-    jsonrpc: '2.0',
-    id: 2,
-    method: 'tools/call',
-    params: { name: 'get_cctv_snapshot', arguments: { camera_id: camera.id } },
-  });
-  assert.equal(unavailable.result.isError, true);
-  assert.ok(
-    !unavailable.result.content.some((entry) => entry.type === 'image'),
-  );
 });
 
 test('snapshot placeholders are refused and unknown frame provenance is explicit', async () => {

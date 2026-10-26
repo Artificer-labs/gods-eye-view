@@ -433,7 +433,7 @@ test('every CCTV route refuses cross-site requests and admits the app itself', a
   }
 });
 
-test('/frame falls back past a non-raster upstream and Street View frame', async (t) => {
+test('/frame never falls back to Street View: a non-raster upstream yields the synthetic card', async (t) => {
   let streetViewType;
   const app = mount(t, ({ url }) =>
     url.startsWith('https://maps.googleapis.com/')
@@ -450,26 +450,34 @@ test('/frame falls back past a non-raster upstream and Street View frame', async
         }),
   );
   process.env.GOOGLE_MAPS_SERVER_API_KEY = 'fixture-key';
+  // Whatever Street View would have answered — even a valid JPEG — the
+  // frame slot gets the labelled synthetic card (audit F-07). A historical
+  // photograph is not a fallback frame.
   for (const type of [
     'image/svg+xml',
     'text/html',
     'application/xml',
     undefined,
+    'image/JPEG; charset=x',
   ]) {
     streetViewType = type;
     const res = await app.call(`/frame/${STILL.id}`);
     assert.equal(res.statusCode, 200);
     assert.equal(res.headers['X-CCTV-Source'], 'synthetic', String(type));
+    assert.equal(res.headers['Content-Type'], 'image/svg+xml', String(type));
+    assert.match(res.body, /CCTV FEED PLACEHOLDER/);
     assert.doesNotMatch(res.body, /street-view/);
   }
-  streetViewType = 'image/JPEG; charset=x';
-  const res = await app.call(`/frame/${STILL.id}`);
-  assert.equal(res.headers['X-CCTV-Source'], 'streetview');
-  assert.equal(res.headers['Content-Type'], 'image/jpeg');
-  assert.equal(res.body, 'street-view');
+  assert.equal(
+    app.requests.some(({ url }) =>
+      url.startsWith('https://maps.googleapis.com/'),
+    ),
+    false,
+    'Street View was consulted for a frame',
+  );
 });
 
-test('a forwarded same-origin request reaches every CCTV route but not the Street View fallback', async (t) => {
+test('a forwarded same-origin request reaches every CCTV route; Street View is never a fallback', async (t) => {
   const app = mount(t, ({ url }) => {
     if (url.startsWith('https://maps.googleapis.com/'))
       return trackedUpstream({
@@ -520,11 +528,14 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
       );
   }
   assert.equal(streetViewCalls(), 0, 'a forwarded request spent the key');
+  // Nor does a direct request: the Street View fallback is gone entirely,
+  // so the key is never spent on a frame, forwarded or not (audit F-07).
   const direct = await app.call(`/frame/${STILL.id}`, {
     host,
     'sec-fetch-site': 'same-origin',
   });
-  assert.equal(direct.headers['X-CCTV-Source'], 'streetview');
-  assert.equal(direct.body, 'street-view');
-  assert.equal(streetViewCalls(), 1);
+  assert.equal(direct.headers['X-CCTV-Source'], 'synthetic');
+  assert.equal(direct.headers['Content-Type'], 'image/svg+xml');
+  assert.doesNotMatch(direct.body, /street-view/);
+  assert.equal(streetViewCalls(), 0, 'a direct request spent the key');
 });

@@ -1192,7 +1192,9 @@ test('share payload wins over local, passive restore writes nothing, and explici
   const manager = productionManager();
   const share = shareSink();
   const coordinator = new LayerStateCoordinator(manager, share, { storage });
-  const explicitEmpty = createDefaultLayerState();
+  // An authored EMPTY share — spelled out, because the fork's durable
+  // default set is no longer empty (DeFlock lit 2026-10-26).
+  const explicitEmpty = { ...createDefaultLayerState(), enabledLayerIds: [] };
   await coordinator.start({ shareLayerState: explicitEmpty });
 
   assert.equal(coordinator.source, 'share');
@@ -1286,7 +1288,13 @@ test('historical share payload suppresses unrelated local layer preferences', as
   });
   await coordinator.start({ allowLocalState: false });
   assert.equal(coordinator.source, 'legacy-share');
-  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, []);
+  // The local preferences (traffic, radio) stay suppressed; what
+  // remains is only the fork's durable default (DeFlock, lit
+  // 2026-10-26) — a default is not a leaked local preference, and it
+  // is not restored into the manager without a selected state.
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'alpr-cameras',
+  ]);
   assert.equal(manager.getEnabledLayerIds().size, 0);
   assert.deepEqual(storage.writes, []);
   coordinator.destroy();

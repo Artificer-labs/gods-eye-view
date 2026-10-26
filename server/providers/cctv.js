@@ -3,7 +3,6 @@ import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
   buildSyntheticCctvSvg,
   cctvLiveMediaType,
-  cctvRasterImageType,
   proxyMediaResponse,
   fetchCctvImageFromUpstream,
   fetchTxdotSnapshot,
@@ -16,13 +15,15 @@ import {
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
-import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
-import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
- * fallback chain (upstream -> Street View -> synthetic SVG), and health tracking.
+ * and health tracking. The frame chain is upstream -> synthetic SVG status
+ * card, with nothing in between: a historical photograph (the old Street View
+ * fallback) must never occupy a live frame's slot, because the projection
+ * path cannot label it and the operator cannot tell it from the camera's own
+ * current view (simulation audit F-07).
  *
  * Endpoints:
  *   GET /api/cctv/sources        — list all registered camera sources
@@ -79,61 +80,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       sourceKind:
         source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
     };
-  };
-
-  /**
-   * Fetch a Google Street View static image as a fallback frame. Server-side
-   * call, never reaches the browser — prefers GOOGLE_MAPS_SERVER_API_KEY
-   * (#33: a key scoped to Street View Static/Places, restricted by server IP
-   * rather than HTTP referrer) and falls back to the browser-exposed
-   * GOOGLE_MAPS_API_KEY for setups that haven't split the two yet.
-   */
-  const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
-    const streetViewKey = googleServerApiKey();
-    if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon))
-      return null;
-    try {
-      const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
-      sv.searchParams.set('size', '960x540');
-      sv.searchParams.set('location', `${lat},${lon}`);
-      sv.searchParams.set(
-        'heading',
-        String(Number.isFinite(heading) ? heading : 0),
-      );
-      sv.searchParams.set(
-        'fov',
-        String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80),
-      );
-      sv.searchParams.set(
-        'pitch',
-        String(Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0),
-      );
-      sv.searchParams.set('source', 'outdoor');
-      sv.searchParams.set('return_error_code', 'true');
-      sv.searchParams.set('key', streetViewKey);
-
-      const svResp = await fetch(sv.toString(), {
-        headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-        signal: AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS),
-      });
-      const svType = cctvRasterImageType(svResp.headers.get('content-type'));
-      if (!svResp.ok || !svType) {
-        try {
-          await svResp.body?.cancel();
-        } catch {
-          /* no-op */
-        }
-        return null;
-      }
-
-      return {
-        ok: true,
-        body: Buffer.from(await svResp.arrayBuffer()),
-        contentType: svType,
-      };
-    } catch {
-      return null;
-    }
   };
 
   const installMiddleware = (server) => {
@@ -509,13 +455,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
-        const heading = Number(
-          url.searchParams.get('heading') || source?.headingDeg,
-        );
-        const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
-        const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
@@ -545,38 +484,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
 
-        // The Street View fallback spends the Google key, so a forwarded
-        // request (whose client this server cannot see) gets the placeholder,
-        // as if no key were configured. Any forwarding header counts, even an
-        // empty one.
-        const forwarded = PROXY_SIGNALS.some(
-          (name) => req.headers?.[name] !== undefined,
-        );
-        const sv = forwarded
-          ? null
-          : await streetViewFallback({
-              lat,
-              lon,
-              heading,
-              fov,
-              pitch,
-            });
-        if (sv?.ok) {
-          setHealth(cameraId, {
-            status: 'degraded',
-            sourceKind: 'streetview',
-            label: 'Google Street View',
-            message: 'Fallback Street View frame',
-          });
-          res.writeHead(200, {
-            'Content-Type': sv.contentType,
-            'Cache-Control': 'no-store',
-            'X-CCTV-Source': 'streetview',
-          });
-          res.end(sv.body);
-          return;
-        }
-
+        // No photograph stands in for a dead camera. The only fallback is
+        // the synthetic status card, which labels itself inside the image
+        // (audit F-07/F-18): a status card is honest; a historical Street
+        // View photograph in this slot was a lie about "now".
         const svg = buildSyntheticCctvSvg({
           cameraId,
           label,

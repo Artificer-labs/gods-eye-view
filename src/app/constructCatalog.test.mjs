@@ -77,14 +77,18 @@ test('catalogs construct distinct layers and classification from their supplied 
     first.metadata.some(({ id }) => id.startsWith('bhote-koshi')),
     false,
   );
-  // Caged layers stay registered but inactive by default: neither traffic
-  // nor ALPR is in the durable default enabled set, and traffic's
-  // unmatched-road treatment is forced to strict hide (no simulated dots).
+  // Caged layers stay registered but inactive by default: traffic is
+  // not in the durable default enabled set, and its unmatched-road
+  // treatment is forced to strict hide (no simulated dots).
+  // ARRAY FORK — DeFlock LIT 2026-10-26 on Dylan's word, Division V's
+  // §6 gates SUSTAIN after re-examination, Greta's dissent on file:
+  // ALPR alone joins the durable default set (see layerState.js and
+  // the LIGHTING RECORD in ARRAY_PATCHES.md). Traffic stays caged.
   const defaults = createDefaultLayerState();
   assert.equal(defaults.enabledLayerIds.includes('traffic'), false);
-  assert.equal(defaults.enabledLayerIds.includes('alpr-cameras'), false);
+  assert.equal(defaults.enabledLayerIds.includes('alpr-cameras'), true);
   assert.ok(first.get('traffic'), 'traffic stays registered, caged');
-  assert.ok(first.get('alpr-cameras'), 'ALPR stays registered, gated');
+  assert.ok(first.get('alpr-cameras'), 'ALPR stays registered, now lit');
   assert.equal(first.get('traffic').getParams().uncoveredRoads, 'hide');
   first.get('traffic').setParams({ uncoveredRoads: 'sim' });
   assert.equal(

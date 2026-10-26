@@ -196,6 +196,9 @@ export function createProjection({
       imageReady: false,
       imageLoading: false,
       imageStamp: 0,
+      // Fetch time of the frame currently on the canvas (0 = none ever).
+      // frames.js judges retention against it via frameFreshness (F-08).
+      lastFrameAt: 0,
       drawnImageStamp: -1,
       // Signature of the pixels currently ON the canvas, plus the reused 64x36
       // scratch used to compute it. null = "nothing known", which always redraws.
