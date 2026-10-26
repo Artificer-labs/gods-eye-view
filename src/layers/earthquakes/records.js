@@ -43,6 +43,10 @@ export function normalizeEarthquakeSnapshot(geojson) {
       mag,
       place: typeof properties.place === 'string' ? properties.place : null,
       time: Number.isFinite(properties.time) ? properties.time : null,
+      // Revision time, kept distinct from the origin `time`: a revised event
+      // supersedes its earlier record, and the analyst envelope must be able
+      // to show both (origin as source_ts, update as published_ts).
+      updated: Number.isFinite(properties.updated) ? properties.updated : null,
     });
   }
   return rows;

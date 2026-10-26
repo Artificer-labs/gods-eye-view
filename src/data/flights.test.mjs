@@ -60,10 +60,22 @@ const FULL_INFO = {
 };
 
 test('flights analyst record: full record maps every contract field', () => {
-  const r = mapAnalystRecord('a1b2c3', FULL_INFO, {
+  const { provenance, ...r } = mapAnalystRecord('a1b2c3', FULL_INFO, {
     military: false,
     routeOk: true,
   });
+  // Graft task 6: the record carries the provenance envelope. FULL_INFO
+  // has no position epoch, so the envelope honestly states UNKNOWN —
+  // the catalog gate withholds such a record (see layers/flights/
+  // provenance.test.mjs for the stamped-with-epoch case).
+  assert.equal(provenance.source_id, 'opensky');
+  assert.equal(provenance.observation_kind, 'OBSERVED');
+  assert.equal(provenance.source_ts, 'UNKNOWN');
+  assert.deepEqual(provenance.quality_flags, [
+    'CLASSIFICATION_DERIVED',
+    'UNKNOWN_FIELD',
+  ]);
+  assert.ok(Number.isFinite(Date.parse(provenance.ingest_ts)));
   assert.deepEqual(r, {
     id: 'SWA696',
     icao24: 'a1b2c3',

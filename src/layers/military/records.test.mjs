@@ -150,3 +150,14 @@ test('military records hold the last track and speed when a poll omits them', ()
   assert.equal(parked.meta.speedMps, 0);
   assert.equal(parked.meta.track, 90);
 });
+
+test('military records persist the fix position epoch for provenance, null when absent', () => {
+  const records = store();
+  const first = records.receive(observation(), context());
+  assert.equal(first.meta.positionEpochMs, 1700000000000);
+  // Not sticky, never the receipt time: a poll with no position time claims
+  // none, while the motion return value keeps its observedAtMs fallback.
+  const second = records.receive(observation({ positionTimeMs: null }), context());
+  assert.equal(second.meta.positionEpochMs, null);
+  assert.equal(second.fixEpochMs, 1700000001000);
+});

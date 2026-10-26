@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { stampRecord } from '../../data/provenance.js';
 import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
@@ -89,6 +90,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           mag,
           place,
           time,
+          updated,
         } of rows) {
           count++;
           const baseRadius = Math.pow(2, mag) * 1000;
@@ -121,6 +123,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
                 mag,
                 place,
                 time,
+                updated,
                 depth: depthKm,
               },
             }),
@@ -207,20 +210,37 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           ? Cesium.Cartographic.fromCartesian(cartesian)
           : null;
         const p = entity.properties;
-        result.push(
-          mapAnalystRecord(
-            {
-              id: p?.usgsId?.getValue(now) ?? null,
-              mag: p?.mag?.getValue(now),
-              place: p?.place?.getValue(now),
-              time: p?.time?.getValue(now),
-              depth: p?.depth?.getValue(now),
-              lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
-              lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
-            },
-            result.length,
-          ),
+        const record = mapAnalystRecord(
+          {
+            id: p?.usgsId?.getValue(now) ?? null,
+            mag: p?.mag?.getValue(now),
+            place: p?.place?.getValue(now),
+            time: p?.time?.getValue(now),
+            depth: p?.depth?.getValue(now),
+            lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
+            lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
+          },
+          result.length,
         );
+        // Provenance: the origin time is when the source says it happened;
+        // the USGS `updated` time is when the source (re)published it. A
+        // revision (updated > time) supersedes the earlier record — never a
+        // silent edit — so it carries SOURCE_REVISED and both times stay
+        // visible in the envelope (source_ts vs published_ts).
+        const updatedMs = p?.updated?.getValue(now);
+        stampRecord(record, {
+          source_id: 'usgs-quakes',
+          source_ts: record.timeMs,
+          published_ts: Number.isFinite(updatedMs) ? updatedMs : undefined,
+          observation_kind: 'OBSERVED',
+          quality_flags:
+            Number.isFinite(updatedMs) &&
+            Number.isFinite(record.timeMs) &&
+            updatedMs > record.timeMs
+              ? ['SOURCE_REVISED']
+              : [],
+        });
+        result.push(record);
       }
       return result;
     },

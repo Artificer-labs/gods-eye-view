@@ -252,6 +252,16 @@ export class FlightRecords {
         prevMeta?.lastContactEpochMs,
         null,
       ),
+      // The fix's own position epoch, for the provenance envelope's
+      // source_ts. NOT sticky and never receipt time: a poll that carries
+      // no position time has no source time to claim, so this stays null
+      // (the fixEpochMs return below keeps its Date.now() fallback for
+      // motion only — that fallback must not leak into provenance).
+      positionEpochMs:
+        Number.isFinite(observation.positionTimeMs) &&
+        observation.positionTimeMs > 0
+          ? observation.positionTimeMs
+          : null,
       // adsbdb enrichment — written by the enrichment callbacks, carried across polls:
       typeCode: prevMeta?.typeCode ?? null,
       typeName: prevMeta?.typeName ?? null,

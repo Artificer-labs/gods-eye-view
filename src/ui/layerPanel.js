@@ -10,6 +10,10 @@ import {
   sourceLabel,
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
+import {
+  provenanceSourceForLayer,
+  provenanceWithheldCount,
+} from './layerProvenance.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { translateFeedError, translateStatusLine } from './statusText.js';
 import {
@@ -30,6 +34,15 @@ const FEED_STATE_LABEL_KEYS = Object.freeze({
   partial: msg('PARTIAL'),
   fallback: msg('FALLBACK'),
   unavailable: msg('UNAVAILABLE'),
+});
+
+// Provenance freshness states are packet vocabulary (provenance.js); like
+// the feed states above, only the label translates.
+const FRESHNESS_LABEL_KEYS = Object.freeze({
+  LIVE: msg('LIVE'),
+  AGING: msg('AGING'),
+  STALE: msg('STALE'),
+  EXPIRED: msg('EXPIRED'),
 });
 
 function lifecycleStateLabel(lifecycleState) {
@@ -202,6 +215,7 @@ export class LayerPanel {
     getRowControls,
     hasRowControls,
     subscribeRowControls,
+    getLayerFreshness = null,
     onHiddenRefresh = () => {},
     weatherClock,
   }) {
@@ -213,6 +227,7 @@ export class LayerPanel {
     this._rowControlsFor = getRowControls;
     this.hasRowControls = hasRowControls;
     this.subscribeRowControls = subscribeRowControls;
+    this.getLayerFreshness = getLayerFreshness;
     this.onHiddenRefresh = onHiddenRefresh;
     this._generation = 0;
     this._removers = [];
@@ -371,6 +386,9 @@ export class LayerPanel {
 
       row.appendChild(topRow);
       row.appendChild(bottomRow);
+      // Readout rows are toggles and metadata only; their provenance lives
+      // with the readout's own panel.
+      if (!readout) this._appendProvenanceDrawer(row, layer);
 
       // Optional per-layer sub-controls (chips + color legend). The click
       // listener is delegated and attached once here, so it survives
@@ -628,7 +646,69 @@ export class LayerPanel {
     this._refreshWeatherPanel();
   }
 
+  /**
+   * The row's provenance drawer: the layer's source declaration from the
+   * registry (name, uri, licence, declared cadence/latency, spatial
+   * resolution). Static truth about the source, labelled as its
+   * declaration — it is not a reading of any one record. Layers with no
+   * registered source get no drawer rather than an invented one.
+   * @param {HTMLElement} row The layer's `.data-toggle-row` node.
+   * @param {object} layer Registered layer entry.
+   */
+  _appendProvenanceDrawer(row, layer) {
+    const source = provenanceSourceForLayer(layer.id);
+    if (!source) return;
+    const drawer = document.createElement('details');
+    drawer.className = 'data-toggle-provenance';
+    const summary = document.createElement('summary');
+    summary.textContent = t('Source declaration');
+    const body = document.createElement('div');
+    body.className = 'data-toggle-provenance-body';
+    const name = document.createElement('div');
+    name.textContent = source.name;
+    const uri = document.createElement('div');
+    uri.textContent = source.uri;
+    const detail = document.createElement('div');
+    detail.textContent = t(
+      'License {license} · cadence {cadence}s · latency {latency}s · {spatial}',
+      {
+        license: source.licenseId,
+        cadence: source.cadenceS,
+        latency: source.latencyS,
+        spatial: source.spatialRes,
+      },
+    );
+    body.appendChild(name);
+    body.appendChild(uri);
+    body.appendChild(detail);
+    drawer.appendChild(summary);
+    drawer.appendChild(body);
+    row.appendChild(drawer);
+  }
+
+  /**
+   * The meta line: the feed presentation, then the layer's provenance —
+   * its freshness state (computed from the newest gated envelope at
+   * render time, via the supplied reader) and the gate's withheld count
+   * when any records were dropped as unprovenanced. Each segment appears
+   * only when it has something true to say, so a layer with no gated
+   * records and nothing withheld reads exactly as before.
+   */
   _buildMetaText(layer) {
+    let text = this._buildFeedMetaText(layer);
+    const freshness =
+      typeof this.getLayerFreshness === 'function' && layer?.id
+        ? this.getLayerFreshness(layer.id)
+        : null;
+    if (freshness && FRESHNESS_LABEL_KEYS[freshness])
+      text += ` · ${t(FRESHNESS_LABEL_KEYS[freshness])}`;
+    const withheld = provenanceWithheldCount(layer?.stats);
+    if (withheld > 0)
+      text += ` · ${t('{count} records withheld — unprovenanced', { count: withheld })}`;
+    return text;
+  }
+
+  _buildFeedMetaText(layer) {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
     const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);

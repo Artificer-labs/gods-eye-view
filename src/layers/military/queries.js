@@ -1,4 +1,5 @@
 import { displayedKinematics } from '../../data/motionModel.js';
+import { stampRecord } from '../../data/provenance.js';
 import { t } from '../../i18n/index.js';
 import * as Cesium from 'cesium';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
@@ -181,7 +182,7 @@ export function createQueries({
       return t || null;
     };
     const callsign = text(info?.callsign);
-    return {
+    const record = {
       id: callsign || text(info?.registration) || icao24,
       icao24,
       callsign,
@@ -219,6 +220,19 @@ export function createQueries({
       routeOrigin: null,
       routeDestination: null,
     };
+    // Provenance envelope (graft task 6): the lat/lon above are the raw
+    // poll fix, so the claim is OBSERVED at the fix's own position epoch —
+    // never receipt time. A record whose poll carried no position epoch
+    // stamps UNKNOWN and the provenance gate withholds it; that is honest,
+    // so no time is invented here. This layer's feed is adsb.lol only.
+    // aircraftClass and the military classification are DERIVED judgements
+    // (registry + classifier), not source fields — flagged as such (F-15).
+    return stampRecord(record, {
+      source_id: 'adsb-lol',
+      source_ts: info?.positionEpochMs ?? null,
+      observation_kind: 'OBSERVED',
+      quality_flags: ['CLASSIFICATION_DERIVED'],
+    });
   }
   const methods = {
     mapAnalystRecord,

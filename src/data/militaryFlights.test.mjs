@@ -55,7 +55,19 @@ test('military stats name the feed until the server names its provider, not a fa
 });
 
 test('military analyst record: full record maps every contract field', () => {
-  const r = mapAnalystRecord('ae01ce', FULL_INFO);
+  const { provenance, ...r } = mapAnalystRecord('ae01ce', FULL_INFO);
+  // Graft task 6: the record carries the provenance envelope. FULL_INFO
+  // has no position epoch, so the envelope honestly states UNKNOWN —
+  // the catalog gate withholds such a record (see layers/military/
+  // provenance.test.mjs for the stamped-with-epoch case).
+  assert.equal(provenance.source_id, 'adsb-lol');
+  assert.equal(provenance.observation_kind, 'OBSERVED');
+  assert.equal(provenance.source_ts, 'UNKNOWN');
+  assert.deepEqual(provenance.quality_flags, [
+    'CLASSIFICATION_DERIVED',
+    'UNKNOWN_FIELD',
+  ]);
+  assert.ok(Number.isFinite(Date.parse(provenance.ingest_ts)));
   assert.deepEqual(r, {
     id: 'RCH451',
     icao24: 'ae01ce',

@@ -2818,5 +2818,10 @@
   "Layers": "图层",
   "Search": "搜索",
   "More": "更多",
-  "Panels": "面板"
+  "Panels": "面板",
+  "AGING": "老化中",
+  "EXPIRED": "已过期",
+  "Source declaration": "来源声明",
+  "License {license} · cadence {cadence}s · latency {latency}s · {spatial}": "许可证 {license} · 周期 {cadence} 秒 · 延迟 {latency} 秒 · {spatial}",
+  "{count} records withheld — unprovenanced": "{count} 条记录未显示 — 无来源证明"
 }

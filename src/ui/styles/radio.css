@@ -839,6 +839,26 @@ html:not([lang='en'])
   margin-top: 2px;
 }
 
+/* The layer's provenance drawer: its source declaration, aligned under the
+   layer name like .data-toggle-meta. */
+.data-toggle-provenance {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  padding-left: 26px;
+  margin-top: 3px;
+}
+
+.data-toggle-provenance summary {
+  cursor: pointer;
+}
+
+.data-toggle-provenance-body {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
 /* Optional per-layer sub-controls: mode chips plus a color legend. Aligned
    under the layer name like .data-toggle-meta, and wrapping so a legend can
    grow without widening the rail. */

@@ -7,6 +7,9 @@ export function normalizeVesselObservation(row, reference = null) {
     longitude = finite(row?.lon);
   if (!id || !coordinates(latitude, longitude)) return null;
   const speedKts = finite(row.speed);
+  // F-14 marker from the server store: an estimated fix time is not a fix
+  // time, so it must not become this observation's time.
+  const timestampEstimated = row?.timestampEstimated === true;
   return {
     id,
     reference: reference ?? id,
@@ -19,9 +22,11 @@ export function normalizeVesselObservation(row, reference = null) {
     speedMps: speedKts == null ? null : speedKts * 0.514444,
     courseDeg: finite(row.course),
     headingDeg: finite(row.heading),
-    observedAtMs:
-      epoch(row.last_position_epoch, 1000) ??
-      epoch(Date.parse(row.last_position_UTC)),
+    observedAtMs: timestampEstimated
+      ? null
+      : (epoch(row.last_position_epoch, 1000) ??
+        epoch(Date.parse(row.last_position_UTC))),
+    timestampEstimated,
     altitudeDatum: 'sea-surface',
   };
 }

@@ -93,3 +93,100 @@ are listed once, when created.
   current (the fallback position's computation time is not knowable,
   so any stamp on it would be invented).
 - `src/layers/satellites/records.test.mjs` (new) — 5 adapter tests.
+
+### Graft task 10 (vessels half) — AIS adapter + F-14 remedy
+
+- `server/providers/vessels/ais-store.js` — F-14: the fallback 'now'
+  for a missing/unparseable AIS timestamp is kept as a number (trail
+  math needs one) but the stored position now carries
+  `timestampEstimated` (`isAisTimestampEstimated` helper); estimated
+  fixes are excluded from trail samples and from freshness math
+  (`newestAisPositionAt` skips them).
+- `src/sources/live/vessels.js`, `src/layers/vessels/ingestion.js`,
+  `src/layers/vessels/records.js` — the marker travels end-to-end to
+  the client; `normalizeVesselObservation` nulls `observedAtMs` for
+  estimated fixes so no fabricated time becomes an observation time.
+- `src/layers/vessels/queries.js` — `stampAnalystRecord` at the
+  `getAnalystRecords` seam (mapAnalystRecord's pure shape untouched):
+  source `aisstream`, kind OBSERVED, `source_ts` = the position's own
+  AIS time; estimated/absent → UNKNOWN + `TIMESTAMP_ESTIMATED` (gate
+  withholds); watchdog `transportStatus === 'stale'` adds `FEED_STALE`.
+- `src/data/aisProvenance.test.mjs` (new) — 7 adapter tests.
+- CCTV half of task 10 is NOT here: it belongs to the sibling
+  `array/cctv-honesty` worktree (F-03/F-07/F-08/F-19 remedies).
+
+### Graft task 8 — earthquakes + FIRMS adapters (revisions visible)
+
+- `src/layers/earthquakes/records.js` — `properties.updated` restored
+  at the normalize seam (upstream dropped it): rows carry `updated`
+  distinct from origin `time`. The store does not mutate in place —
+  each poll rebuilds entities from the full snapshot, so a revision
+  arrives as a replacement carrying the new `updated`.
+- `src/layers/earthquakes/index.js` — analyst records stamped: source
+  `usgs-quakes`, kind OBSERVED, `source_ts` = origin time,
+  `published_ts` = update time, `SOURCE_REVISED` when updated > time.
+- `src/layers/firms/queries.js` — analyst records stamped: source
+  `firms-viirs-nrt`, kind OBSERVED, `source_ts` = the record's own
+  detection time (`acq_date`+`acq_time` → `acqMs`, never dropped);
+  `published_ts` deliberately omitted (the feed carries none; the
+  proxy's batch `fetchedAt` is fetch time, not publication) — so
+  `latency_ms` states the detection's true age at ingest.
+- `src/layers/earthquakes/records.test.mjs` updated for the restored
+  field; `src/layers/earthquakes/provenance.test.mjs` and
+  `src/layers/firms/provenance.test.mjs` (new) — adapter tests.
+
+### Graft task 6 — flights + military adapters (per-fix source time)
+
+- `src/layers/flights/records.js`, `src/layers/military/records.js` —
+  meta gains `positionEpochMs`: the fix's own position epoch
+  (OpenSky `time_position` / readsb-derived), null when the source
+  gave none. Non-sticky; the motion path's `Date.now()` fallback for
+  `fixEpochMs` never leaks into the stored field.
+- `src/layers/flights/queries.js`, `src/layers/military/queries.js` —
+  `mapAnalystRecord` returns the record stamped: kind OBSERVED (the
+  record's lat/lon are the raw poll fix), `source_ts` =
+  `positionEpochMs` (null → UNKNOWN → gate withholds), source
+  `opensky`/`adsb-lol` by the feed that delivered the poll, flag
+  `CLASSIFICATION_DERIVED` (aircraftClass + military flag are derived
+  judgements, F-15).
+- `src/data/motionModel.js` — F-09: `synthesizeForwardKinematicsFix`
+  output now carries a durable `synthetic: true` marker; consumers
+  verified to read only time/track/velocity/position.
+- Tests: records tests extended in both layers; new
+  `src/layers/flights/provenance.test.mjs`,
+  `src/layers/military/provenance.test.mjs`; motionModel suite
+  extended. Known follow-up: the "full record" deepEqual contract
+  tests in `src/data/flights.test.mjs` / `src/data/militaryFlights.test.mjs`
+  needed the envelope key added to expectations (integrator fix —
+  done, both suites green again).
+
+### Graft task 9 — freshness rendering + provenance surfacing
+
+- `src/ui/layerProvenance.js` (new) — `layerFreshness(records, now)`:
+  the newest provenanced envelope in a bounded sample (≤ 50) judged
+  by `freshnessOf`; empty sample → null (no claim); records with no
+  complete envelope → EXPIRED (fail-closed).
+- `src/app/layerPresentation.js` — `_layerFreshness(id)` samples
+  through the existing module seam, caches the newest envelope,
+  invalidates on `data-updated`, and recomputes state from the cached
+  envelope on every read — a dead feed walks LIVE→AGING→STALE→EXPIRED
+  with no re-sampling and no wall-clock/poll-success signal.
+- `src/ui/layerPanel.js` — the meta line appends the freshness state
+  and, when the gate has withheld, "N records withheld —
+  unprovenanced"; non-readout rows gain a "Source declaration"
+  `<details>` drawer (registry name, uri, license, cadence, latency,
+  spatial resolution). Readout rows (weather/recent-imagery) deferred:
+  their provenance belongs with their readout panels.
+- `src/ui/styles/radio.css`, `src/i18n/locales/{es,ru,zh-CN}.json` —
+  drawer styling + 5 translated strings.
+- Tests: `src/ui/layerProvenance.test.mjs` (new, 7),
+  `src/app/layerPresentation.test.mjs` (new, 3).
+
+## Integrator fix — package-boundary manifest (tasks 6–10 fallout)
+
+`scripts/package-boundaries.json`: declared `src/data/provenance.js` and
+`src/data/sourceRegistry.js` (slice-1 modules whose ownership was never
+registered) in every boundary group whose build reaches them, and
+`src/ui/layerProvenance.js` in the groups that reach it (layer-panel,
+ui-shell, application-components). No code change; `npm run
+check:boundaries` passes (exit 0, all groups checked).

@@ -105,6 +105,13 @@ export function ingestAisStreamEnvelope(envelope) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return true;
 
   const staticData = _aisStreamStatic.get(mmsi) || {};
+  // F-14: a missing/unparseable AIS timestamp must not silently wear a
+  // fabricated 'now'. The fallback time is kept (trail math needs a number)
+  // but the estimate is marked on the record, and the marker is part of the
+  // store's output shape (aisStreamRows) so every consumer can see it.
+  const timestampEstimated = isAisTimestampEstimated(
+    metadata.time_utc ?? metadata.TimeUtc,
+  );
   _aisStreamVessels.set(mmsi, {
     lat,
     lon,
@@ -122,15 +129,19 @@ export function ingestAisStreamEnvelope(envelope) {
     // Use the AIS message's own report time, not server ingest wall-clock —
     // trail spacing and dead reckoning depend on true fix epochs.
     last_position_epoch: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
+    timestampEstimated,
     _updatedAt: Date.now(),
   });
 
-  appendAisTrackSample(
-    mmsi,
-    lat,
-    lon,
-    aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
-  );
+  // An estimated fix time is not a fix time: never let it space the trail.
+  if (!timestampEstimated) {
+    appendAisTrackSample(
+      mmsi,
+      lat,
+      lon,
+      aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
+    );
+  }
 
   pruneAisStreamCache();
   return true;
@@ -297,7 +308,18 @@ function pruneAisStreamCache() {
 }
 
 export function newestAisPositionAt(rows) {
-  return rows[0]?.last_position_UTC || null;
+  // Freshness must not be judged from a fabricated time (F-14): skip rows
+  // whose position time is estimated.
+  const real = rows.find((row) => row?.timestampEstimated !== true);
+  return real?.last_position_UTC || null;
+}
+
+/** True when an AIS timestamp is missing or unparseable (F-14). */
+function isAisTimestampEstimated(value) {
+  const text = stringValue(value);
+  if (!text) return true;
+  const normalized = text.replace(' +0000 UTC', 'Z').replace(' UTC', 'Z');
+  return Number.isNaN(new Date(normalized).getTime());
 }
 
 function stringValue(value) {

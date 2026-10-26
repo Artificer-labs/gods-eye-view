@@ -341,3 +341,23 @@ test('corridorPathLatLon returns nothing without a display position', () => {
     extrapolating: true, displayLat: NaN, displayLon: -97.66, courseDeg: 0, speedMps: 10, lookaheadSec: 60,
   }), []);
 });
+
+test('synthetic forward fix carries its durable synthetic marker (F-09)', () => {
+  const epochMs = 1_800_000_000_000;
+  const newest = {
+    time: Cesium.JulianDate.fromDate(new Date(epochMs)),
+    epochMs,
+    position: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 9000),
+    velocity: 100,
+    track: 90,
+  };
+  const synthetic = synthesizeForwardKinematicsFix(newest, {
+    epochMs: epochMs + 10_000,
+    velocity: 220,
+    track: 15,
+  });
+  assert.ok(synthetic);
+  assert.equal(synthetic.synthetic, true);
+  // The observed fix it was projected from is NOT synthetic.
+  assert.equal(newest.synthetic, undefined);
+});

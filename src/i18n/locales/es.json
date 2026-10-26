@@ -2952,5 +2952,10 @@
   "Layers": "Capas",
   "Search": "Buscar",
   "More": "Más",
-  "Panels": "Paneles"
+  "Panels": "Paneles",
+  "AGING": "ENVEJECIENDO",
+  "EXPIRED": "CADUCADO",
+  "Source declaration": "Declaración de la fuente",
+  "License {license} · cadence {cadence}s · latency {latency}s · {spatial}": "Licencia {license} · cadencia {cadence}s · latencia {latency}s · {spatial}",
+  "{count} records withheld — unprovenanced": "{count} registros retenidos — sin procedencia"
 }

@@ -176,6 +176,7 @@ export function createIngestion({
         record.observedAtMs == null
           ? ''
           : new Date(record.observedAtMs).toISOString(),
+      timestampEstimated: record.timestampEstimated === true,
     };
   }
   /** Ask again when the view moved away from the last area asked for. */

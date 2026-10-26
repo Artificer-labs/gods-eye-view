@@ -3019,5 +3019,10 @@
   "Layers": "Слои",
   "Search": "Поиск",
   "More": "Ещё",
-  "Panels": "Панели"
+  "Panels": "Панели",
+  "AGING": "СТАРЕЕТ",
+  "EXPIRED": "ИСТЁК",
+  "Source declaration": "Декларация источника",
+  "License {license} · cadence {cadence}s · latency {latency}s · {spatial}": "Лицензия {license} · период {cadence} с · задержка {latency} с · {spatial}",
+  "{count} records withheld — unprovenanced": "{count} записей удержано — происхождение не подтверждено"
 }

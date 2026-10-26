@@ -1,4 +1,5 @@
 import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { stampRecord } from '../../data/provenance.js';
 import { t } from '../../i18n/index.js';
 import { REFRESH_INTERVAL_MS } from './policy.js';
 
@@ -166,7 +167,19 @@ export function createQueries({
         : 2000;
       const result = [];
       for (const fire of layerState._firesByFrp) {
-        result.push(components.model.mapAnalystRecord(fire));
+        const record = components.model.mapAnalystRecord(fire);
+        // Provenance: source_ts is the VIIRS detection (overpass) time —
+        // the record's own acq date+time UTC, carried as acqTime — never
+        // the ingest time. A detection is typically hours old at ingest,
+        // and the envelope's latency_ms states that true age. The FIRMS
+        // feed publishes no per-record publication time, so published_ts
+        // is omitted and the envelope honestly records UNKNOWN.
+        stampRecord(record, {
+          source_id: 'firms-viirs-nrt',
+          source_ts: record.acqTime,
+          observation_kind: 'OBSERVED',
+        });
+        result.push(record);
         if (result.length >= limit) break;
       }
       return result;

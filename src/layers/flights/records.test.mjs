@@ -140,3 +140,16 @@ test('civil emergency status follows the latest poll instead of sticking', () =>
   assert.equal(next.meta.squawk, '2000');
   assert.equal(next.meta.emergency, null);
 });
+
+test('civil records persist the fix position epoch for provenance, null when absent', () => {
+  const store = records();
+  const first = store.receive(observation(), view());
+  assert.equal(first.meta.positionEpochMs, 1700000000000);
+  // Not sticky, never receipt time: a poll with no position time claims none,
+  // while the motion return value keeps its own Date.now() fallback.
+  const second = store.receive(observation({ positionTimeMs: null }), view());
+  assert.equal(second.meta.positionEpochMs, null);
+  assert.ok(Number.isFinite(second.fixEpochMs) && second.fixEpochMs > 0);
+  const zero = store.receive(observation({ positionTimeMs: 0 }), view());
+  assert.equal(zero.meta.positionEpochMs, null);
+});

@@ -21,6 +21,7 @@ import {
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
 } from './policy.js';
+import { stampRecord } from '../../data/provenance.js';
 
 export function createQueries({
   vesselState,
@@ -196,6 +197,48 @@ export function createQueries({
       destination: text(record?.destination),
       navStatus: null,
     };
+  }
+
+  /**
+   * Stamp one analyst record with its provenance envelope (graft task 10).
+   *
+   * `source_ts` is the position's own AIS timestamp — never receipt time.
+   * A record whose fix time is estimated (the server store's F-14 marker)
+   * or absent has no source time to claim: it is stamped with source_ts
+   * UNKNOWN plus TIMESTAMP_ESTIMATED, so the catalog gate withholds it.
+   * The AIS watchdog's verdict reaches this seam as
+   * `state.feed.transportStatus` (the server watchdog snapshot, forwarded
+   * through the /api/vessels payload): while it reads 'stale', stamped
+   * records also gain FEED_STALE.
+   * @param {Object} analystRecord - Output of mapAnalystRecord.
+   * @param {Object} record - Internal vessel record the analyst record came from.
+   * @returns {Object} The analyst record, with `.provenance` attached.
+   */
+  function stampAnalystRecord(analystRecord, record) {
+    const estimated = record?.timestampEstimated === true;
+    let source_ts = null;
+    if (!estimated) {
+      const epochSec = record?.lastPositionEpoch;
+      if (typeof epochSec === 'number' && Number.isFinite(epochSec) && epochSec > 0)
+        source_ts = epochSec * 1000;
+      else if (
+        typeof record?.lastPositionUtc === 'string' &&
+        record.lastPositionUtc &&
+        Number.isFinite(Date.parse(record.lastPositionUtc))
+      )
+        source_ts = record.lastPositionUtc;
+    }
+    const quality_flags = [];
+    if (estimated || source_ts === null)
+      quality_flags.push('TIMESTAMP_ESTIMATED');
+    if (state.feed.transportStatus === 'stale')
+      quality_flags.push('FEED_STALE');
+    return stampRecord(analystRecord, {
+      source_id: 'aisstream',
+      source_ts: source_ts ?? undefined,
+      observation_kind: 'OBSERVED',
+      quality_flags,
+    });
   }
 
   /**
@@ -414,7 +457,7 @@ export function createQueries({
       const result = [];
       for (const record of records) {
         if (result.length >= limit) break;
-        result.push(mapAnalystRecord(record));
+        result.push(stampAnalystRecord(mapAnalystRecord(record), record));
       }
       return result;
     },
@@ -559,6 +602,7 @@ export function createQueries({
     hasUsableVesselCoordinates,
     classifyAisFeedSnapshot,
     mapAnalystRecord,
+    stampAnalystRecord,
     vesselDatumHeightM,
     reduceVesselSelection,
     normalizeSelectionMmsi,

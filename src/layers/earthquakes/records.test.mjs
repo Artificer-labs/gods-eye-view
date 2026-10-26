@@ -17,6 +17,7 @@ test('normalizeEarthquakeSnapshot parses valid GeoJSON earthquake features', () 
           mag: 4.2,
           place: 'San Francisco Bay Area, CA',
           time: 1711929600000,
+          updated: 1711930500000,
         },
       },
     ],
@@ -34,6 +35,7 @@ test('normalizeEarthquakeSnapshot parses valid GeoJSON earthquake features', () 
     mag: 4.2,
     place: 'San Francisco Bay Area, CA',
     time: 1711929600000,
+    updated: 1711930500000,
   });
 });
 
@@ -111,6 +113,7 @@ test('normalizeEarthquakeSnapshot normalizes optional fields to null when omitte
   assert.equal(rows[0].depthKm, null);
   assert.equal(rows[0].place, null);
   assert.equal(rows[0].time, null);
+  assert.equal(rows[0].updated, null);
 });
 
 test('normalizeEarthquakeSnapshot returns null for malformed structures or non-array features', () => {

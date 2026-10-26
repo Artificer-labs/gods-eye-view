@@ -498,5 +498,10 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
       ? Math.max(0, next.velocity)
       : previousVelocity,
     track: Number.isFinite(next.track) ? next.track : previousTrack,
+    // F-09: this fix is synthesized, not observed — it must carry its
+    // marker durably so history/trail consumers never mistake projected
+    // kinematics for a source fix. Additive: existing consumers read only
+    // time/epochMs/position/velocity/track and are unaffected.
+    synthetic: true,
   };
 }

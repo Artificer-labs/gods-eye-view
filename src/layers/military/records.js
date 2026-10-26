@@ -166,6 +166,13 @@ export class MilitaryFlightRecords {
         prevMeta?.lastContactEpochMs,
         null,
       ),
+      // The fix's own position epoch, for the provenance envelope's
+      // source_ts. NOT sticky and never the receipt time (`observedAtMs`
+      // only backs the fixEpochMs return for motion): a poll that carries
+      // no position time has no source time to claim, so this stays null.
+      positionEpochMs: Number.isFinite(aircraft.positionTimeMs)
+        ? aircraft.positionTimeMs
+        : null,
       turnRateDps: prevMeta?.turnRateDps || 0,
       // Per poll, NOT sticky (mirror of flights): a cleared code clears here.
       squawk: aircraft.squawk ?? null,
