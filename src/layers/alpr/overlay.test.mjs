@@ -214,7 +214,10 @@ test('adapter labels never claim a custom source is public OSM data', () => {
       { manufacturer: 'Vendor', operator: 'Vendor' },
       { label: 'Custom directory' },
     ),
-    ['Source: Custom directory', 'VENDOR'],
+    // The age-band readout (spec task 4) rides along: a bare adapter
+    // record has no field verification and no envelope — UNKNOWN and
+    // EXPIRED, stated, never dressed as fresh.
+    ['Source: Custom directory', 'VENDOR', 'FIELD VERIFIED UNKNOWN', 'AGE EXPIRED'],
   );
 });
 

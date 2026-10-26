@@ -18,6 +18,7 @@ import {
   paintDirectionWedge,
   validAlprGroundHeight,
 } from './visuals.js';
+import { alprAgeBandAlpha } from './ageBands.js';
 
 /** Per-layer presentation on a caller-owned overlay; Cesium remains the fallback. */
 export function createAlprOverlay({
@@ -272,6 +273,13 @@ export function createAlprOverlay({
         setShown(entity, false);
         continue;
       }
+      // Age-band fade (spec §2.4): canvas-painted wedges and glyphs fade
+      // with the record's band exactly as the native billboards tint, so
+      // the two render paths never disagree about a record's age. The
+      // selected record keeps full alpha.
+      const bandedAlpha = selected
+        ? alpha
+        : alpha * alprAgeBandAlpha(record);
       const wedge = entity.gevAlprWedge;
       if (wedge) {
         const left = Cesium.SceneTransforms.worldToWindowCoordinates(
@@ -284,7 +292,7 @@ export function createAlprOverlay({
         );
         if (left && right) {
           ctx.save();
-          ctx.globalAlpha *= alpha;
+          ctx.globalAlpha *= bandedAlpha;
           paintDirectionWedge(ctx, origin, left, right, selected);
           ctx.restore();
         }
@@ -304,7 +312,7 @@ export function createAlprOverlay({
         origin,
         selected,
         image,
-        alpha,
+        alpha: bandedAlpha,
         scale: markerScale(
           Cesium.Cartesian3.distance(state.viewer.camera.positionWC, anchor),
         ),

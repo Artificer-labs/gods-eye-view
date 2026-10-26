@@ -14,6 +14,7 @@ import {
   alprCreditMarkup,
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
+import { summarizeAlprAgeBands } from './ageBands.js';
 import { t, tn, msg } from '../../i18n/index.js';
 
 /**
@@ -41,7 +42,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     viewer: null,
     dataSource: null,
     credit: null,
-    creditTimer: null,
     creditPresented: false,
     enabled: false,
     records: [],
@@ -51,6 +51,10 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     error: null,
     status: 'idle',
     stale: false,
+    /** Served extract stamp of the last snapshot (ISO) — null when UNKNOWN. */
+    extractTs: null,
+    /** True when a consulted extract's served stamp has stopped advancing (frozen). */
+    extractStalled: false,
     /** Whether the query hit QUERY_LIMIT — the view likely holds more cameras than shown. */
     saturated: false,
     loading: false,
@@ -214,6 +218,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       if (snapshot.zoomIn) {
         state.records = [];
         state.recordById.clear();
+        state.extractTs = snapshot.extractTs ?? null;
+        state.extractStalled = snapshot.extractStalled === true;
         state.noCoverage = false;
         state.lastQueryBox = null;
         state.lastQueryZoom = null;
@@ -237,6 +243,11 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.recordById = new Map(records.map((r) => [r.id, r]));
       state.lastUpdate = Date.now();
       state.stale = stale;
+      // Extract health (spec §3.3 rule 5): a frozen extract must be
+      // visible from the layer's own health surface, not only implied
+      // by the stale flag.
+      state.extractTs = snapshot.extractTs ?? null;
+      state.extractStalled = snapshot.extractStalled === true;
       // Saturated when the QUERY truncated; the render cap is judged against
       // the cameras in view (renderSaturated). Either way the row says so.
       state.saturated = saturated;
@@ -443,6 +454,9 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         noCoverage: Boolean(state.noCoverage),
         lastUpdate: state.lastUpdate,
         stale: state.stale,
+        extractTs: state.extractTs ?? 'UNKNOWN',
+        extractStalled: Boolean(state.extractStalled),
+        ageBands: summarizeAlprAgeBands(state.records),
         saturated: state.saturated || state.renderSaturated,
         renderRevision: state.renderRevision,
         onScreen: state.onScreen ?? null,
@@ -498,3 +512,17 @@ export {
   QUERY_REUSE_MS,
 } from './policy.js';
 export { createOverpassAlprSource, createAlprTileSource } from './source.js';
+export { createExtractStallTracker } from './stall.js';
+export {
+  ALPR_AGE_BANDS,
+  ALPR_AGE_BAND_TINT,
+  alprAgeBand,
+  alprVerificationBand,
+  alprAgeBandAlpha,
+  summarizeAlprAgeBands,
+} from './ageBands.js';
+export {
+  createReconciledAlprSource,
+  mergeAlprAttributions,
+  reconcileAlprSnapshots,
+} from './reconcile.js';
