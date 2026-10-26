@@ -5,6 +5,8 @@ import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
+import { withProvenanceGate } from '../data/provenance.js';
+import { sourceIdForLayer } from '../data/sourceRegistry.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
 import { createApplicationMilitary } from './layers/militaryFlights.js';
@@ -31,8 +33,6 @@ import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
-import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
-import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
 
 /**
  * Hardware-local layers are registered like any other but never enter share
@@ -42,9 +42,27 @@ export const LOCAL_ONLY_LAYER_METADATA = Object.freeze([
   Object.freeze({ id: 'local-adsb', disposition: 'local-only' }),
 ]);
 
+/**
+ * ARRAY FORK (graft task 2): the hardcoded Bhote Koshi incident layers are
+ * STRUCK from this fork's catalog — a canned incident, however real its
+ * subject, does not belong in a picture whose law is provenance-and-
+ * freshness; the array's incident register replaces it (Tranche 4). The
+ * strike is catalog-level: the layers are never constructed or registered.
+ * Their share-link token reservations stay in layerState.js untouched —
+ * that file's own doctrine keeps an allocation "even if its layer is later
+ * removed", so old links still decode to the same ids; they simply name
+ * layers this fork no longer carries.
+ */
+export const STRUCK_LAYER_IDS = Object.freeze([
+  'bhote-koshi-2026',
+  'bhote-koshi-locator',
+]);
+
 /** Serialization metadata for every layer the application catalog constructs. */
 export const APPLICATION_LAYER_METADATA = Object.freeze([
-  ...LAYER_STATE_REGISTRY,
+  ...LAYER_STATE_REGISTRY.filter(
+    (entry) => !STRUCK_LAYER_IDS.includes(entry.id),
+  ),
   ...LOCAL_ONLY_LAYER_METADATA,
 ]);
 
@@ -106,10 +124,6 @@ export function createApplicationCatalog({
     });
     const catalog = createLayerCatalog(
       [
-        createBhoteKoshiEventLayer(),
-        createBhoteKoshiLocatorLayer({
-          boundaryResolver: nepalBoundaryResolver,
-        }),
         flights,
         military,
         createApplicationLocalAdsb({
@@ -179,6 +193,13 @@ export function createApplicationCatalog({
       ],
       metadata,
     );
+    // ARRAY FORK (graft task 3): the fail-closed provenance gate sits at
+    // this choke point — every layer the application will ever render is
+    // constructed above, so every layer is gated here. Records without a
+    // complete provenance envelope are dropped and counted by the gate,
+    // never handed to a consumer.
+    for (const layer of catalog.layers)
+      withProvenanceGate(layer, { source_id: sourceIdForLayer(layer.id) });
     return Object.freeze({
       ...catalog,
       getSourceAvailability: sourceComposition.createAvailabilityLookup(

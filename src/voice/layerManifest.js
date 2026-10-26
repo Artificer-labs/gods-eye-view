@@ -404,13 +404,12 @@ const layers = [
 ];
 
 /**
- * Catalog layers deliberately outside voice, with the reason. The Bhote Koshi
- * pair belong to a scripted scene and are driven by `control_scene`.
+ * Catalog layers deliberately outside voice, with the reason.
+ * ARRAY FORK (graft task 2): the Bhote Koshi pair formerly listed here was
+ * struck from the catalog itself (see constructCatalog.js), so no entry
+ * remains — this registry names only layers the catalog carries.
  */
-export const VOICE_OFF_LAYERS = Object.freeze({
-  'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
-  'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
-});
+export const VOICE_OFF_LAYERS = Object.freeze({});
 
 const TYPE_NAMES = Object.freeze({
   n: 'number',

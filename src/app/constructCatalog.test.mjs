@@ -2,6 +2,8 @@ import { createSurfaceServices } from './surfaceServices.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApplicationCatalog } from './constructCatalog.js';
+import { createDefaultLayerState } from '../data/layerState.js';
+import { sourceIdForLayer } from '../data/sourceRegistry.js';
 import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
@@ -40,7 +42,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 32);
+  assert.equal(first.layers.length, 30);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
@@ -67,19 +69,46 @@ test('catalogs construct distinct layers and classification from their supplied 
     order.slice(order.indexOf('traffic'), order.indexOf('directions') + 1),
     ['traffic', 'cctv', 'radio', 'transit', 'bikeshare', 'directions'],
   );
-  assert.ok(first.get('bhote-koshi-2026'));
-  assert.ok(first.get('bhote-koshi-locator'));
+  // ARRAY FORK (graft task 2): the Bhote Koshi pair is struck — never
+  // constructed, never registered, absent from the catalog metadata.
+  assert.equal(first.get('bhote-koshi-2026'), undefined);
+  assert.equal(first.get('bhote-koshi-locator'), undefined);
+  assert.equal(
+    first.metadata.some(({ id }) => id.startsWith('bhote-koshi')),
+    false,
+  );
+  // Caged layers stay registered but inactive by default: neither traffic
+  // nor ALPR is in the durable default enabled set, and traffic's
+  // unmatched-road treatment is forced to strict hide (no simulated dots).
+  const defaults = createDefaultLayerState();
+  assert.equal(defaults.enabledLayerIds.includes('traffic'), false);
+  assert.equal(defaults.enabledLayerIds.includes('alpr-cameras'), false);
+  assert.ok(first.get('traffic'), 'traffic stays registered, caged');
+  assert.ok(first.get('alpr-cameras'), 'ALPR stays registered, gated');
+  assert.equal(first.get('traffic').getParams().uncoveredRoads, 'hide');
+  first.get('traffic').setParams({ uncoveredRoads: 'sim' });
+  assert.equal(
+    first.get('traffic').getParams().uncoveredRoads,
+    'hide',
+    'the fork refuses to re-enable simulated traffic fill',
+  );
   const lifecycle = new LayerLifecycle({});
   for (const layer of first.layers) lifecycle.register(layer);
   const rows = lifecycle.getAll();
-  for (const id of ['bhote-koshi-2026', 'bhote-koshi-locator']) {
+  // ARRAY FORK (graft task 3): every constructed layer passed the
+  // fail-closed provenance gate at this choke point, named against its
+  // registered source.
+  for (const layer of first.layers) {
     assert.equal(
-      rows.find((row) => row.id === id)?.showInTogglePanel,
-      false,
-      `${id} remains registered for Scenes but is absent from Data Layers`,
+      typeof layer.getProvenanceGateStats,
+      'function',
+      `${layer.id} is provenance-gated`,
     );
-    assert.equal(typeof first.get(id).enable, 'function');
-    assert.equal(typeof first.get(id).setParams, 'function');
+    assert.equal(
+      layer.getProvenanceGateStats().sourceId,
+      sourceIdForLayer(layer.id),
+      `${layer.id} is gated against its registered source`,
+    );
   }
   assert.equal(
     rows.find((row) => row.id === 'flights')?.showInTogglePanel,
@@ -154,7 +183,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     surface: fixtureSurface(lifetime.signal),
   };
   const catalog = createApplicationCatalog(options);
-  assert.equal(catalog.layers.length, 32);
+  assert.equal(catalog.layers.length, 30);
   assert.deepEqual(catalog.get('street-level').providerIds, []);
   assert.equal(
     catalogControlServices(catalog).streetLevelLayer,
