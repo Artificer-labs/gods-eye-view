@@ -181,8 +181,15 @@ export function createRetention({ state, parts }) {
       altitude,
       roadDotBudget(altitude),
     );
+    // ARRAY FORK (graft task 2): the traffic layer is CAGED without a
+    // TomTom key. Roads are still admitted, surface-prepared and committed
+    // — the load is real, and its bounds/coverage bookkeeping must settle
+    // exactly as upstream's does — but every population target is zero in
+    // keyless mode, so upstream's simulated vehicles are never spawned.
+    // Live (keyed) mode is untouched.
+    const caged = !state._liveMode;
     for (let i = 0; i < wanted.length; i++)
-      records.get(wanted[i].key).target = budgets[i];
+      records.get(wanted[i].key).target = caged ? 0 : budgets[i];
     state._roads = wanted;
     state._motion.publishes++;
     // First paint gets one bounded batch without an additional frame wait.

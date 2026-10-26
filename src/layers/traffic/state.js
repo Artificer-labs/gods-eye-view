@@ -141,7 +141,16 @@ export function createState({ services }) {
 
   layerState._closedRoads = 0;
 
-  /** @type {'sim'|'hide'} Live-mode treatment of roads without flow data. */
+  /**
+   * Live-mode treatment of roads without flow data. Upstream default 'sim'
+   * spawns simulated white dots on unmatched roads. ARRAY FORK (graft
+   * task 2): this fork never renders simulated traffic — the mode is forced
+   * to 'hide' at the fork's seams (controls.setParams refuses 'sim', and
+   * the application shim births the catalog layer in 'hide'), so in the
+   * fork's app an unmatched road spawns nothing. The state default stays
+   * upstream's so the layer's own unit harness keeps its meaning.
+   * @type {'sim'|'hide'}
+   */
 
   layerState._uncoveredMode = 'sim';
 

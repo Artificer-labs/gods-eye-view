@@ -107,7 +107,11 @@ test('traffic recovers a failed destination request after another city has loade
   layer.enable(viewer);
   await tick(400);
   await tick(2000);
-  assert.ok(layer.getStats().count > 0);
+  // ARRAY FORK (graft task 2): this fixture is keyless, so "loaded" is
+  // proven by the committed render stamp, not a dot count — a keyless
+  // load renders no simulated dots at all.
+  assert.ok(layer.getStats().lastUpdate, 'the first city loaded');
+  assert.equal(layer.getStats().count, 0, 'keyless renders no dots');
   move(-40, 40, 1000000);
   move(-0.1276, 51.5072);
   await tick(400);
@@ -117,7 +121,7 @@ test('traffic recovers a failed destination request after another city has loade
     londonCalls >= 2,
     'the stationary destination must retry without a toggle',
   );
-  assert.ok(layer.getStats().count > 0);
+  assert.ok(layer.getStats().lastUpdate, 'the destination load committed');
   assert.equal(layer.getStats().loading, false);
 });
 
@@ -265,7 +269,12 @@ test('an unclassified road failure keeps the general line', async (t) => {
   assert.equal(layer.getStats().error, 'OpenFreeMap tiles unavailable');
 });
 
-test('a stalled TomTom status never blocks road acquisition or first simulated dots', async (t) => {
+test('a stalled TomTom status never blocks road acquisition, and no dots render until live mode is known', async (t) => {
+  // ARRAY FORK (graft task 2): upstream asserted the first SIMULATED dots
+  // appear while the status probe is stalled. This fork renders no
+  // simulated traffic: roads are still acquired (the load path is not
+  // blocked), but until the key question is answered the layer shows
+  // nothing rather than inventing vehicles.
   let calls = 0;
   const { layer, viewer, tick } = setup(
     t,
@@ -281,7 +290,7 @@ test('a stalled TomTom status never blocks road acquisition or first simulated d
   await tick(400);
   await tick(2000);
   assert.ok(calls > 0);
-  assert.ok(layer.getStats().count > 0);
+  assert.equal(layer.getStats().count, 0);
 });
 
 test('explicit enable starts roads without the camera debounce', async (t) => {
@@ -349,13 +358,15 @@ test('coverage changes at the same center reload and disabling invalidates cover
   layer.enable(viewer);
   await tick(1000);
   await tick(2000);
-  assert.ok(layer.getStats().count > 0);
+  // Keyless fixture: a committed load is the render stamp (ARRAY FORK
+  // graft task 2 — keyless renders no simulated dots to count).
+  assert.ok(layer.getStats().lastUpdate);
   const before = calls.length;
   layer.disable(viewer);
   layer.enable(viewer);
   await tick(1000);
   await tick(2000);
-  assert.ok(layer.getStats().count > 0, 'enable must repaint the same view');
+  assert.ok(layer.getStats().lastUpdate, 'enable must repaint the same view');
   assert.ok(calls.length >= before);
 });
 
@@ -417,12 +428,14 @@ test('partial coverage retries while coarse roads render, then stops after three
   layer.enable(viewer);
   await tick(400);
   await tick(0);
-  assert.ok(layer.getStats().count > 0);
+  // Keyless fixture: coarse roads rendering is the committed render stamp
+  // (ARRAY FORK graft task 2 — no simulated dots are counted).
+  assert.ok(layer.getStats().lastUpdate);
   const initial = calls;
   for (let i = 0; i < 12; i++) {
     await tick(30000);
     await tick(400);
   }
   assert.equal(calls, initial * 4, 'initial load plus three bounded retries');
-  assert.ok(layer.getStats().count > 0);
+  assert.ok(layer.getStats().lastUpdate);
 });

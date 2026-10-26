@@ -127,13 +127,13 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._lastRenderAltitude,
           'Density',
         );
-      // Live-mode treatment of roads TomTom has no flow data for:
-      // 'sim' (default) keeps them as today's white ambient dots — colored =
-      // real data, white = simulation; 'hide' spawns nothing on them (strict
-      // data-integrity view). Owner-explorable; re-render applies on the next
-      // camera-driven load.
+      // Live-mode treatment of roads TomTom has no flow data for.
+      // ARRAY FORK (graft task 2): strict hide is FORCED. Upstream's 'sim'
+      // mode kept unmatched roads as white ambient (simulated) dots; this
+      // fork never renders simulated traffic, so a 'sim' request is refused
+      // and the mode stays 'hide' — simulated dots cannot spawn.
       if (params.uncoveredRoads === 'sim' || params.uncoveredRoads === 'hide') {
-        layerState._uncoveredMode = params.uncoveredRoads;
+        layerState._uncoveredMode = 'hide';
       }
       // Jam-viz prototype toggle (owner A/B): 'none' = shipped main behavior;
       // live mode only, applies on the next camera-driven load like the

@@ -107,6 +107,10 @@ export function createModel({ state: layerState, services, parts, source }) {
     // Live flow: closed roads carry zero traffic; congestion packs more dots.
     // `road.flow` is only ever set in live mode, so the keyless path is
     // untouched (flow stays undefined → multiplier 1, identical output).
+    // ARRAY FORK (graft task 2): the keyless population these counts plan
+    // is never spawned — the cage sits at the population seam in
+    // retention.js, not here, because flow.js also uses these budgets to
+    // admit and prepare real roads.
     const flow = layerState._liveMode ? road.flow : null;
     if (flow?.closure) return 0;
     // Strict data-integrity view: uncovered roads spawn nothing when hidden.
