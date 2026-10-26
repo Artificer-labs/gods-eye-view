@@ -17,6 +17,7 @@ import {
 import { buildOverpassQuery, normalizeAlprNode } from './records.js';
 import { decodeAlprTile } from './tileRecords.js';
 import { stampAlprRecord } from './provenance.js';
+import { createExtractStallTracker } from './stall.js';
 // Marks text for i18n extraction; the UI translates it with t(). Kept local
 // because AI tool services import this module outside the browser.
 const msg = (text) => text;
@@ -69,11 +70,15 @@ export function createAlprPrecisionCache(limit = PRECISION_CACHE_LIMIT) {
   };
 }
 
+/** How often the served-stamp probe may re-ask (aligned with the tile TTL). */
+const SERVED_STAMP_PROBE_MS = 60 * 60 * 1000;
+
 /** Construct the viewport-bounded OpenStreetMap hourly extract adapter. */
 export function createAlprTileSource({
   tileFetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
-  const sources = ['us', 'ca'].map((country) =>
+  const countries = ['us', 'ca'];
+  const sources = countries.map((country) =>
     createVectorTileSource({
       tileJsonUrl: `https://tiles.dontgetflocked.com/cameras-${country}-hourly.json`,
       allowedOrigin: 'https://tiles.dontgetflocked.com',
@@ -85,6 +90,37 @@ export function createAlprTileSource({
   );
   const precision = createAlprPrecisionCache();
   const precise = precision.apply;
+  // Stall detection (spec §3.3 rule 5): one tracker per extract witness,
+  // fed by the served stamp — the TileJSON's Last-Modified header, the
+  // same basis the census artifact records. The vector-tile reader
+  // discards response headers, so the stamp is probed directly, at most
+  // once per tile TTL per country. A probe that fails or names no stamp
+  // observes NOTHING (stamp UNKNOWN) — it never invents one.
+  const trackers = Object.fromEntries(
+    countries.map((country) => [country, createExtractStallTracker()]),
+  );
+  const stampProbes = new Map();
+  async function servedStamp(country, signal) {
+    const nowMs = Date.now();
+    const cached = stampProbes.get(country);
+    if (cached && nowMs - cached.probedAtMs < SERVED_STAMP_PROBE_MS)
+      return cached.stampIso;
+    let stampIso = null;
+    try {
+      const response = await tileFetchImpl(
+        `https://tiles.dontgetflocked.com/cameras-${country}-hourly.json`,
+        { signal },
+      );
+      const lastModified = response?.headers?.get?.('last-modified');
+      const ms = lastModified ? Date.parse(lastModified) : NaN;
+      if (Number.isFinite(ms)) stampIso = new Date(ms).toISOString();
+      await response?.body?.cancel?.().catch(() => {});
+    } catch {
+      stampIso = cached?.stampIso ?? null;
+    }
+    stampProbes.set(country, { stampIso, probedAtMs: nowMs });
+    return stampIso;
+  }
   return {
     /**
      * Read the camera records for every extract tile covering `box`.
@@ -126,6 +162,7 @@ export function createAlprTileSource({
         east: Math.max(...tileBounds.map((b) => b.east)),
       };
       const records = new Map();
+      const consulted = [];
       let covered = false,
         partial = false;
       for (const [index, source] of sources.entries()) {
@@ -149,6 +186,7 @@ export function createAlprTileSource({
         )
           continue;
         covered = true;
+        consulted.push(countries[index]);
         const result = await source.fetchBounds(box, { zoom, signal });
         partial ||= result.partial;
         for (const record of result.tiles.flat())
@@ -179,9 +217,32 @@ export function createAlprTileSource({
       const ingestNow = Date.now();
       for (const record of list)
         stampAlprRecord(record, { witness: 'tiles', now: ingestNow });
+      // Stall observation (spec §3.3 rule 5): every consulted witness's
+      // tracker sees this cycle's served stamp. The snapshot's extract
+      // time is the OLDEST consulted stamp — the stalest witness bounds
+      // the picture — and the snapshot reads stale when any consulted
+      // extract is frozen: a 200-returning corpse degrades like one.
+      // (The stamp rides the snapshot for health/stats; the per-record
+      // envelope's extract_ts wiring is a separate, later step.)
+      let extractTs = null;
+      let extractStalled = false;
+      for (const country of consulted) {
+        const status = trackers[country].observe(
+          await servedStamp(country, signal),
+          ingestNow,
+        );
+        if (
+          status.extractTs !== 'UNKNOWN' &&
+          (extractTs == null || status.extractTs < extractTs)
+        )
+          extractTs = status.extractTs;
+        extractStalled ||= status.extractStalled;
+      }
       return {
         records: list,
-        stale: false,
+        stale: extractStalled,
+        extractTs,
+        extractStalled,
         saturated: partial || truncated,
         noCoverage: !covered,
         // A partial or truncated read does not cover its tiles; reuse only the box.
@@ -193,6 +254,7 @@ export function createAlprTileSource({
     destroy() {
       for (const source of sources) source.clear();
       precision.clear();
+      stampProbes.clear();
     },
     label: msg('OpenStreetMap · community mapped'),
     attribution: {

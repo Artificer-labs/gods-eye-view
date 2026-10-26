@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   reconcileAlprSnapshots,
   createReconciledAlprSource,
+  mergeAlprAttributions,
   distanceMeters,
 } from './reconcile.js';
 
@@ -141,6 +142,88 @@ test('the composed source degrades to tiles when the overlay fails', async () =>
   assert.equal(snapshot.records.length, 1);
   assert.equal(snapshot.overlayError, 'Overpass timed out');
   assert.equal(snapshot.records[0].absenceNoted, false);
+});
+
+const TILE_ATTRIBUTION = {
+  name: 'OpenStreetMap',
+  description: '© OpenStreetMap contributors, ODbL',
+  text: '© OpenStreetMap contributors, ODbL',
+  href: 'https://www.openstreetmap.org/copyright',
+};
+const OVERPASS_ATTRIBUTION = {
+  name: 'OpenStreetMap',
+  description: 'OpenStreetMap contributors (ODbL 1.0; community mapped)',
+  text: '© OpenStreetMap contributors',
+  href: 'https://www.openstreetmap.org/copyright',
+};
+
+test('merged attribution carries BOTH witnesses credit lines (gate condition)', () => {
+  const merged = mergeAlprAttributions(TILE_ATTRIBUTION, OVERPASS_ATTRIBUTION);
+  assert.equal(merged.name, 'OpenStreetMap');
+  assert.equal(merged.href, 'https://www.openstreetmap.org/copyright');
+  // The tile witness's line.
+  assert.ok(merged.text.includes('© OpenStreetMap contributors, ODbL'));
+  assert.ok(merged.description.includes('© OpenStreetMap contributors, ODbL'));
+  // The Overpass witness's own line — the credit the tile-only pass-through dropped.
+  assert.ok(
+    merged.description.includes(
+      'OpenStreetMap contributors (ODbL 1.0; community mapped)',
+    ),
+  );
+  assert.ok(merged.text.endsWith('© OpenStreetMap contributors'));
+  // Identical lines are unioned once, never duplicated.
+  const same = mergeAlprAttributions(TILE_ATTRIBUTION, TILE_ATTRIBUTION);
+  assert.equal(same.text, TILE_ATTRIBUTION.text);
+  assert.equal(same.description, TILE_ATTRIBUTION.description);
+  // A missing witness degrades to the surviving credit, never to none.
+  assert.equal(mergeAlprAttributions(TILE_ATTRIBUTION, undefined), TILE_ATTRIBUTION);
+  assert.equal(mergeAlprAttributions(undefined, OVERPASS_ATTRIBUTION), OVERPASS_ATTRIBUTION);
+});
+
+test('the composed source ships merged attribution and dual-witness records', async () => {
+  const tileSource = {
+    label: 'tiles',
+    attribution: TILE_ATTRIBUTION,
+    async fetch() {
+      return {
+        records: [rec(1, { operator: 'Old' })],
+        stale: false,
+        saturated: false,
+        zoom: 12,
+      };
+    },
+  };
+  const overlay = {
+    attribution: OVERPASS_ATTRIBUTION,
+    async fetch() {
+      return {
+        records: [rec(1, { operator: 'New' })],
+        stale: false,
+        saturated: false,
+      };
+    },
+  };
+  const source = createReconciledAlprSource({
+    tileSource,
+    overpassSource: overlay,
+  });
+  // Source-level: both credits ride the one attribution object.
+  assert.ok(
+    source.attribution.description.includes('(ODbL 1.0; community mapped)'),
+  );
+  assert.ok(source.attribution.text.includes(', ODbL'));
+  const snapshot = await source.fetch({
+    south: 30,
+    west: -97.1,
+    north: 30.1,
+    east: -96.9,
+  });
+  // Record-level: the reconciled record itself credits both witnesses.
+  assert.deepEqual(snapshot.records[0].provenance.witnesses, [
+    'tiles',
+    'overpass',
+  ]);
+  assert.deepEqual(snapshot.records[0].witnesses, ['tiles', 'overpass']);
 });
 
 test('the composed source merges a live overlay when it answers', async () => {

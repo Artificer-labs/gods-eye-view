@@ -172,6 +172,37 @@ export function reconcileAlprSnapshots({
 }
 
 /**
+ * Merge two witnesses' attribution objects into one credit that names
+ * BOTH. The witnesses credit the same data under different lines (the
+ * tile extract's "© OpenStreetMap contributors, ODbL" and the Overpass
+ * path's "OpenStreetMap contributors (ODbL 1.0; community mapped)"), and
+ * Division V's gate ruling is explicit: a reconciled source that passes
+ * through only one witness's attribution silently drops the other's
+ * credit. Distinct lines are unioned, never overwritten; identical lines
+ * appear once.
+ *
+ * @param {object|null} primary The system-of-record witness's attribution.
+ * @param {object|null} secondary The overlay witness's attribution.
+ * @returns {object|null} The merged attribution {name, description, text, href}.
+ */
+export function mergeAlprAttributions(primary, secondary) {
+  if (!primary) return secondary || null;
+  if (!secondary) return primary;
+  const joinDistinct = (a, b) =>
+    [
+      ...new Set(
+        [a, b].filter((v) => typeof v === 'string' && v.trim()),
+      ),
+    ].join(' · ');
+  return {
+    name: primary.name || secondary.name,
+    description: joinDistinct(primary.description, secondary.description),
+    text: joinDistinct(primary.text, secondary.text),
+    href: primary.href || secondary.href,
+  };
+}
+
+/**
  * Compose the two existing source factories into one reconciled source
  * for the layer. The tile extract is fetched first (system of record);
  * the Overpass overlay is then attempted for the same box — an overlay
@@ -179,9 +210,13 @@ export function reconcileAlprSnapshots({
  * tile-only with `overlayError` named, and (per rule 3) records no
  * absences from a query that never completed.
  *
- * The layer's default source is unchanged (tile-only, in src/data);
- * this factory is the reconciled path the spec builds toward, adopted
- * when the Division V gates pass.
+ * This is the layer's default source (wired in src/data/alprCameras.js)
+ * under Division V's conditional ruling: the reconciled source is at
+ * least as honest as the tile-only incumbent on every axis the gates
+ * measure — PROVIDED its attribution is merged from both witnesses
+ * (mergeAlprAttributions above), never the tile credit alone. The layer
+ * itself remains caged and default-off in the catalog; wiring the
+ * better source does not enable it.
  *
  * @param {object} sources {tileSource, overpassSource} — each with fetch(box, signal).
  * @returns {{fetch: Function, label: string, attribution: object}}
@@ -217,6 +252,11 @@ export function createReconciledAlprSource({ tileSource, overpassSource }) {
       return {
         records,
         stale: Boolean(tileSnapshot.stale || overlay?.stale),
+        // Stall health rides through untouched (spec §3.3 rule 5): a
+        // frozen extract degrades the reconciled snapshot exactly as it
+        // degrades the tile-only one.
+        extractTs: tileSnapshot.extractTs ?? null,
+        extractStalled: tileSnapshot.extractStalled === true,
         saturated:
           tileSnapshot.saturated === true ||
           overlay?.saturated === true,
@@ -232,6 +272,9 @@ export function createReconciledAlprSource({ tileSource, overpassSource }) {
       overpassSource.destroy?.();
     },
     label: tileSource.label,
-    attribution: tileSource.attribution,
+    attribution: mergeAlprAttributions(
+      tileSource.attribution,
+      overpassSource.attribution,
+    ),
   };
 }
